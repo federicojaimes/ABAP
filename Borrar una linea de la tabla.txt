@@ -1,0 +1,13 @@
+IF sy-subrc = 0.
+      CLEAR lv_sytabix.
+      lv_sytabix = sy-tabix.
+      READ TABLE gt_esll INTO lw_esll WITH KEY packno = lw_eslh-packno.
+      IF sy-subrc = 0.
+        lw_alv-ktext1 = lw_esll-ktext1.
+        lw_alv-srvpos = lw_esll-srvpos.
+        lw_alv-extrow = lw_esll-extrow.
+      ENDIF.
+      IF lv_sytabix IS NOT INITIAL.
+        DELETE gt_eslh INDEX lv_sytabix.
+      ENDIF.
+    ENDIF.

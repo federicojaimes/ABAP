@@ -1,0 +1,56 @@
+*Obtengo el numero de la cabecera para el smart
+  DATA: lt_line TYPE TABLE OF tline,
+        wa_line type tline,
+        lv_anticipo type string,
+        lv_name type THEAD-TDNAME.
+        lv_name = lv_ebeln.
+
+  CALL FUNCTION 'READ_TEXT'
+    EXPORTING
+      client                  = sy-mandt
+      id                      = 'F01'
+      language                = 'S'
+      name                    = lv_name
+      object                  = 'EKKO'
+*     ARCHIVE_HANDLE          = 0
+*     LOCAL_CAT               = ' '
+* IMPORTING
+*     HEADER                  =
+*     OLD_LINE_COUNTER        =
+    TABLES
+      lines                   = lt_line
+    EXCEPTIONS
+      id                      = 1
+      language                = 2
+      name                    = 3
+      not_found               = 4
+      object                  = 5
+      reference_check         = 6
+      wrong_access_to_archive = 7
+      OTHERS                  = 8.
+
+IF sy-subrc = 0.
+READ TABLE lt_line into wa_line index 1.
+ IF sy-subrc = 0.
+  lv_anticipo = wa_line-tdline.
+ endif.
+endif.
+
+    " Invoco al Smartform
+    CALL FUNCTION lv_fm_name
+      EXPORTING
+        control_parameters = gs_ssfctrlop
+        output_options     = gs_ssfcompop
+        user_settings      = space
+        iv_ebeln           = lv_ebeln
+***Inicio ABI 26-07
+        lv_anticipo        = lv_anticipo
+***Fin ABI 26-07
+      IMPORTING
+        job_output_info    = gs_output
+      EXCEPTIONS
+        formatting_error   = 1
+        internal_error     = 2
+        send_error         = 3
+        user_canceled      = 4
+        OTHERS             = 5.

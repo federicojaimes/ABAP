@@ -1,0 +1,46 @@
+DATA : lv_dir TYPE eps2filnam.
+
+lv_dir   = '/VTS/DEV/'. 
+
+DATA it_files TYPE TABLE OF eps2fili.
+
+  CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+    EXPORTING
+      iv_dir_name                  = lv_dir
+    tables
+      dir_list                     = it_files
+   EXCEPTIONS
+     INVALID_EPS_SUBDIR           = 1
+     SAPGPARAM_FAILED             = 2
+     BUILD_DIRECTORY_FAILED       = 3
+     NO_AUTHORIZATION             = 4
+     READ_DIRECTORY_FAILED        = 5
+     TOO_MANY_READ_ERRORS         = 6
+     EMPTY_DIRECTORY_LIST         = 7
+     OTHERS                       = 8.
+
+DATA : p_file_n TYPE localfile .
+
+  READ TABLE it_files INTO DATA(wa_files) INDEX 1. "reading recent file
+  IF sy-subrc = 0.
+     p_file_n = wa_files-name.
+  ENDIF.
+
+DATA: BEGIN OF it_tab OCCURS 0,
+        rec(1000) TYPE c,
+      END OF it_tab.
+DATA: wa_tab(1000) TYPE c.
+
+  OPEN DATASET p_file_n FOR INPUT IN TEXT MODE ENCODING NON-UNICODE.
+  IF sy-subrc = 0.
+    DO.
+      READ DATASET p_file_n INTO wa_tab.
+      IF sy-subrc <> 0.
+        EXIT.
+      ENDIF.
+      it_tab-rec = wa_tab.
+      APPEND it_tab.
+    ENDDO.
+  ENDIF.
+  CLOSE DATASET p_file_n.
+

@@ -1,0 +1,29 @@
+PARAMETERS: p_vbeln type vbak-vbeln.
+
+DATA: l_header_inx TYPE bapisdh1x,
+l_header_in TYPE bapisdh1.
+
+data: lt_return type standard table of bapiret2.
+
+MOVE: 'U' TO l_header_inx-updateflag,
+'X' TO l_header_inx-bill_block,  " Billing
+'ZL' TO l_header_in-bill_block.  " Billing block.
+
+CALL FUNCTION 'BAPI_SALESORDER_CHANGE'
+EXPORTING
+salesdocument = p_vbeln
+order_header_in = l_header_in
+order_header_inx = l_header_inx
+TABLES
+return = lt_return.
+
+* check for errors.
+LOOP AT lt_return transporting no fields WHERE type = 'A' Or type = 'E'.
+  EXIT.
+ENDLOOP.
+
+If sy-subrc = 0.
+  write: / 'Error in updating'.
+ELSE.
+  commit work and wait.
+endif.

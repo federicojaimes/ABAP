@@ -1,0 +1,232 @@
+  METHOD zvalidar_tope.
+    TYPES:BEGIN OF ty_data,
+             lifnr TYPE mereq_item-lifnr,
+             werks TYPE mereq_item-werks,
+             waers TYPE mereq_item-waers,
+             gswrt TYPE mereq_item-gswrt,
+         END OF ty_data,
+
+             BEGIN OF ty_eban,
+               frgkz TYPE eban-frgkz,
+               werks TYPE eban-werks,
+               lifnr TYPE eban-lifnr,
+               frgdt TYPE eban-frgdt,
+               waers TYPE eban-waers,
+               rlwrt TYPE eban-rlwrt,
+               banfn TYPE eban-banfn,
+               bnfpo TYPE eban-bnfpo,
+             END OF ty_eban,
+
+             BEGIN OF ty_eban_sum,
+               lifnr TYPE eban-lifnr,
+               werks TYPE eban-werks,
+               waers TYPE eban-waers,
+               imp   TYPE eban-rlwrt,
+             END OF ty_eban_sum,
+
+             BEGIN OF ty_varkey,
+               varkey TYPE rstable-varkey,
+               END OF ty_varkey.
+
+
+    DATA: lw_item_data        TYPE mereq_item,
+          lt_pos_data         TYPE TABLE OF ty_data,
+          lw_pos_data         TYPE ty_data,
+          lt_pos_sum          TYPE TABLE OF ty_data,
+          lw_pos_sum          TYPE ty_data,
+          lt_tope_mensual     TYPE TABLE OF zmm_tope_mensual,
+          lt_eban             TYPE TABLE OF ty_eban,
+          lv_fecha            TYPE dats,
+          lv_result           TYPE sy-subrc,
+          lv_tope_sp_desc     TYPE eban-preis,
+          varkey              TYPE rstable-varkey,
+          ls_eban             TYPE eban,
+          lv_flag             TYPE c,
+          lt_eban_sumadas     TYPE TABLE OF ty_eban_sum,
+          lw_eban_sumadas     TYPE ty_eban_sum,
+          lt_varkey           TYPE TABLE OF ty_varkey,
+          lw_varkey           TYPE ty_varkey.
+    INCLUDE mm_messages_mac.
+
+    IF sy-tcode EQ 'ME54N'.
+
+* Obtengo header
+      DATA(lw_header) = im_header->get_data( ).
+
+      SELECT SINGLE *    "Compruebo si estan liberando la solped
+        FROM eban
+        INTO ls_eban
+        WHERE banfn = lw_header-banfn.
+      IF sy-subrc = 0.
+        IF ls_eban-frgkz = 'X'.  "Si la solped esta siendo liberada realiza toda la logica
+
+* Obtengo Items
+          DATA(lt_items) = im_header->get_items( ).
+
+* Se obtienen las datos de las posiciones
+          LOOP AT lt_items INTO DATA(lw_items).
+
+            CALL METHOD lw_items-item->get_data
+              RECEIVING
+                re_data = lw_item_data.
+
+            lw_pos_data-lifnr = lw_item_data-lifnr.
+            lw_pos_data-werks = lw_item_data-werks.
+            lw_pos_data-waers = lw_item_data-waers.
+            lw_pos_data-gswrt = lw_item_data-gswrt.
+            APPEND lw_pos_data TO lt_pos_data.
+            CLEAR: lw_pos_data, lw_item_data.
+          ENDLOOP.
+
+*Ordeno las posiciones por Proveedor - Centro - Moneda
+          SORT lt_pos_data BY lifnr werks waers ASCENDING.
+
+*Sumo el total de las posiciones por Centro
+          LOOP AT lt_pos_data INTO lw_pos_data.
+            MOVE-CORRESPONDING lw_pos_data TO lw_pos_sum.
+            COLLECT lw_pos_sum INTO lt_pos_sum.
+          ENDLOOP.
+
+*Recupero el Tope Mensual
+*Verifico si alguien mas esta utilizando la tabla de topes
+          LOOP AT lt_pos_sum INTO lw_pos_sum.
+            CONCATENATE sy-mandt lw_pos_sum-lifnr lw_pos_sum-werks INTO varkey.
+            CALL FUNCTION 'ENQUEUE_E_TABLE'
+              EXPORTING
+                tabname        = 'ZMM_TOPE_MENSUAL'
+                varkey         = varkey
+              EXCEPTIONS
+                foreign_lock   = 1
+                system_failure = 2
+                OTHERS         = 3.
+            IF sy-subrc = 1.
+              mmpur_message 'E' 'ZTOPEMENSUAL' '003'
+                            ' '
+                            ' '
+                            ' '
+                            ' '.
+            ENDIF.
+            lw_varkey-varkey = varkey.
+            APPEND lw_varkey TO lt_varkey.
+            CLEAR: varkey, lw_varkey.
+          ENDLOOP.
+
+          CONCATENATE: sy-datum(4) sy-datum+4(02) '01' INTO lv_fecha.
+
+          SELECT mandt werks lifnr moneda valor_tope
+            FROM zmm_tope_mensual
+            INTO TABLE lt_tope_mensual
+            FOR ALL ENTRIES IN lt_pos_data
+            WHERE werks  EQ lt_pos_data-werks
+            AND   lifnr  EQ lt_pos_data-lifnr
+            AND   moneda EQ lt_pos_data-waers.
+          IF sy-subrc <> 0. "El proveedor no tiene asignado limite mensual
+            mmpur_message 'W' 'ZTOPEMENSUAL' '000'
+                          ' '
+                          ' '
+                          ' '
+                          ' '.
+          ENDIF.
+
+          IF lt_tope_mensual IS NOT INITIAL.
+            SORT lt_tope_mensual BY lifnr werks moneda.
+*Recupero las Solpeds ya liberadas del mes
+            SELECT  frgkz werks lifnr frgdt waers rlwrt banfn bnfpo
+              FROM eban
+              INTO TABLE lt_eban
+              FOR ALL ENTRIES IN lt_pos_data
+              WHERE frgkz EQ '2'
+              AND   werks EQ lt_pos_data-werks
+              AND   lifnr EQ lt_pos_data-lifnr
+              AND   frgdt BETWEEN lv_fecha AND sy-datum
+              AND   waers EQ lt_pos_data-waers.
+            IF lt_eban IS NOT INITIAL.
+*Calculo el total de solped liberadas en el mes para comparar despues con el limite
+              SORT lt_eban BY werks waers.
+              LOOP AT lt_eban INTO DATA(lw_eban).
+                lw_eban_sumadas-lifnr = lw_eban-lifnr.
+                lw_eban_sumadas-werks = lw_eban-werks.
+                lw_eban_sumadas-waers = lw_eban-waers.
+                lw_eban_sumadas-imp   = lw_eban_sumadas-imp + lw_eban-rlwrt.
+                AT END OF werks.
+                  APPEND lw_eban_sumadas TO lt_eban_sumadas.
+                ENDAT.
+              ENDLOOP.
+            ENDIF.
+
+*Descuento las Solpeds ya liberadas del mes al limite mensual
+            IF lt_eban_sumadas IS NOT INITIAL.
+              LOOP AT lt_eban_sumadas INTO lw_eban_sumadas.
+                READ TABLE lt_tope_mensual INTO DATA(lw_tope_mensual) WITH KEY lifnr  = lw_eban_sumadas-lifnr
+                                                                               werks  = lw_eban_sumadas-werks
+                                                                               moneda = lw_eban_sumadas-waers
+                                                                               BINARY SEARCH.
+                IF sy-subrc = 0.
+                  IF lv_flag IS INITIAL.
+                    lv_tope_sp_desc = lw_tope_mensual-valor_tope - lw_eban_sumadas-imp.
+                    lv_flag = abap_true.
+                  ELSE.
+                    lv_tope_sp_desc = lv_tope_sp_desc - lw_eban_sumadas-imp.
+                  ENDIF.
+                ELSE.
+                  mmpur_message 'W' 'ZTOPEMENSUAL' '001'
+                                lw_tope_mensual-lifnr
+                                lw_tope_mensual-werks
+                                lw_tope_mensual-moneda
+                                ' '.
+
+                ENDIF.
+              ENDLOOP.
+            ELSE.
+              LOOP AT lt_pos_sum INTO lw_pos_sum.
+                READ TABLE lt_tope_mensual INTO lw_tope_mensual WITH KEY lifnr  = lw_pos_sum-lifnr
+                                                                         werks  = lw_pos_sum-werks
+                                                                         moneda = lw_pos_sum-waers
+                                                                         BINARY SEARCH.
+                IF sy-subrc = 0.
+                  lv_tope_sp_desc = lw_tope_mensual-valor_tope.
+                ENDIF.
+              ENDLOOP.
+            ENDIF.
+
+            IF lv_tope_sp_desc > 0. "Si el tope mensual es positivo procedemos a descontar la solped que estamos liberando
+              READ TABLE lt_pos_sum INTO lw_pos_sum WITH KEY lifnr = lw_tope_mensual-lifnr
+                                                             werks = lw_tope_mensual-werks
+                                                             waers = lw_tope_mensual-moneda
+                                                             BINARY SEARCH.
+              IF sy-subrc = 0.
+                lv_tope_sp_desc = lv_tope_sp_desc - lw_pos_sum-gswrt.
+                IF lv_tope_sp_desc < 0.
+                  mmpur_message 'E' 'ZTOPEMENSUAL' '002'
+                                ' '
+                                ' '
+                                ' '
+                                ' '.
+                  gv_flag_fail = 'X'.
+                ENDIF.
+              ENDIF.
+            ELSE.
+              mmpur_message 'E' 'ZTOPEMENSUAL' '002'
+                            ' '
+                            ' '
+                            ' '
+                            ' '.
+              gv_flag_fail = 'X'.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lt_varkey IS NOT INITIAL.
+      LOOP AT lt_varkey INTO lw_varkey.
+        CALL FUNCTION 'DEQUEUE_E_TABLE'
+          EXPORTING
+            tabname = 'ZMM_TOPE_MENSUAL'
+            varkey  = lw_varkey-varkey.
+      ENDLOOP.
+    ENDIF.
+    CLEAR: lw_header, lv_flag.
+
+
+  ENDMETHOD.

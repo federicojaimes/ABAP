@@ -1,0 +1,55 @@
+TOP
+DATA: bdcdata   LIKE bdcdata    OCCURS 0 WITH HEADER LINE,
+      messtab   LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE.
+-----------------------------------------------------------
+F01
+(Mapeo)
+PERFORM bdc_dynpro USING 'SAPMF05A' '0100'.
+
+      PERFORM bdc_field  USING 'BDC_CURSOR'
+                               'RF05A-NEWUM'.
+
+      PERFORM bdc_field  USING 'BDC_OKCODE'
+                               '/00'.
+
+      PERFORM bdc_field  USING 'BDC_OKCODE'
+                               '/00'.
+
+      PERFORM bdc_field  USING 'BKPF-BLDAT'
+                               gw_datos-fec_acred.
+
+      PERFORM bdc_field  USING 'BKPF-BLART'
+                               'SB'.
+
+      PERFORM bdc_field  USING 'BKPF-BUKRS'
+                               p_bukrs.
+
+      PERFORM bdc_field  USING 'BKPF-BUDAT'
+                               sy-datum.
+
+      PERFORM bdc_field  USING 'BKPF-MONAT'
+                               11.
+
+      PERFORM bdc_field  USING 'BKPF-WAERS'
+                               'ARS'.
+
+(ejecucion)
+CALL TRANSACTION 'MM01' USING BDCDATA
+                 MODE   'A'  " A: Show all steps, E: Show only errors, N: Run in background.
+                 UPDATE 'S' "S: wait to save data
+                 MESSAGES INTO MESSTAB.
+------------------------------------------------------------
+FORM bdc_dynpro USING program dynpro.
+  CLEAR bdcdata.
+  bdcdata-program  = program.
+  bdcdata-dynpro   = dynpro.
+  bdcdata-dynbegin = 'X'.
+  APPEND bdcdata.
+ENDFORM.
+
+FORM bdc_field USING fnam fval.
+  CLEAR bdcdata.
+  bdcdata-fnam = fnam.
+  bdcdata-fval = fval.
+  APPEND bdcdata.
+ENDFORM.

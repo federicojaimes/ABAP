@@ -1,0 +1,20 @@
+DATA: ls_variant TYPE  disvariant.
+
+  ls_variant-report = sy-repid.
+  ls_variant-username = sy-uname.
+
+  lwa_layout-zebra   = 'X'.
+  lwa_layout-colwidth_optimize  = 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      i_save             = 'X'
+      is_layout          = lwa_layout
+      it_fieldcat        = li_fieldcat[]
+      is_variant         = ls_variant
+    TABLES
+      t_outtab           = gt_alv
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.

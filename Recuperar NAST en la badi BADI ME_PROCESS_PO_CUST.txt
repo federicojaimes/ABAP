@@ -1,0 +1,5 @@
+FIELD-SYMBOLS: <xnast> TYPE ANY TABLE.
+
+DATA: ls_xnast TYPE vnast.
+
+ASSIGN ('(SAPLMEPO)XNAST[]') TO <xnast>.

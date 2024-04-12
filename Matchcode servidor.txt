@@ -1,0 +1,46 @@
+CONSTANTS:lc_p TYPE c VALUE 'P',
+            lc_a TYPE dxfields-location VALUE 'A'.
+
+  DATA: li_host         TYPE STANDARD TABLE OF msxxlist,
+        lw_host         TYPE msxxlist,
+        lv_path         TYPE dxfields-longpath,
+        lv_ubicacion(1) TYPE c,
+        lv_abend        TYPE c.
+
+*-nombre del servidor
+    CALL FUNCTION 'RFC_GET_LOCAL_SERVERS'
+      TABLES
+        hosts         = li_host
+      EXCEPTIONS
+        not_available = 1
+        OTHERS        = 2.
+
+    IF sy-subrc IS INITIAL.
+
+*-Nombre del servidor a la estructura
+      CLEAR lw_host.
+      READ TABLE li_host INTO lw_host INDEX 1.
+
+*-Obtengo el path
+      CALL FUNCTION 'F4_DXFILENAME_TOPRECURSION'
+        EXPORTING
+          i_location_flag = lc_a
+          i_server        = lw_host-name
+        IMPORTING
+          o_location_flag = lv_ubicacion
+          o_path          = lv_path
+          abend_flag      = lv_abend
+        EXCEPTIONS
+          rfc_error       = 1
+          error_with_gui  = 2
+          OTHERS          = 3.
+
+*-Si se obtiene un path
+      IF sy-subrc    IS INITIAL AND
+         NOT lv_path IS INITIAL AND
+         lv_abend    IS INITIAL.
+
+*-Devuelvo ruta al parametro de selección
+        pc_file = lv_path.
+      ENDIF.
+    ENDIF.

@@ -1,0 +1,17 @@
+DATA: ls_address TYPE bapiaddr3.
+DATA: ls_admindata TYPE bapiuseradmin.
+DATA: ls_userdefault TYPE bapidefaul.
+DATA: ls_company TYPE bapiuscomp.
+DATA: lt_message TYPE bapirettab.
+ 
+" Userdaten auslesen
+CALL FUNCTION 'BAPI_USER_GET_DETAIL'
+  EXPORTING
+    username  = sy-uname
+  IMPORTING
+    address   = ls_address
+    admindata = ls_admindata
+    company   = ls_company
+    defaults  = ls_userdefault
+  TABLES
+    return    = lt_message.

@@ -1,0 +1,16 @@
+DATA: c_fnh_mask1 TYPE dxfields-filemask VALUE '*',
+        search_dir1 TYPE dxfields-longpath.
+
+  CALL FUNCTION '/SAPDMC/LSM_F4_SERVER_FILE'
+    EXPORTING
+      directory        = search_dir1
+      filemask         = c_fnh_mask1
+    IMPORTING
+      serverfile       = p_file
+    EXCEPTIONS
+      canceled_by_user = 1
+      OTHERS           = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.

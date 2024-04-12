@@ -1,0 +1,27 @@
+CALL FUNCTION 'CONVERT_OTFSPOOLJOB_2_PDF'
+    EXPORTING
+      src_spoolid              = wa_spoolnum
+      no_dialog                = ''
+    IMPORTING
+      pdf_bytecount            = ld_bin_filesize
+      pdf_spoolid              = ld_pdf_spoolid
+      btc_jobname              = ld_btc_jobname
+      btc_jobcount             = ld_btc_jobcount
+    TABLES
+      pdf                      = it_arch_pdf
+    EXCEPTIONS
+      err_no_otf_spooljob      = 1
+      err_no_spooljob          = 2
+      err_no_permission        = 3
+      err_conv_not_possible    = 4
+      err_bad_dstdevice        = 5
+      user_cancelled           = 6
+      err_spoolerror           = 7
+      err_temseerror           = 8
+      err_btcjob_open_failed   = 9
+      err_btcjob_submit_failed = 10
+      err_btcjob_close_failed  = 11
+      OTHERS                   = 12.
+  IF sy-subrc = 0.
+    EXPORT it_arch_pdf[] TO MEMORY ID 'OTF_OP'.
+  ENDIF.

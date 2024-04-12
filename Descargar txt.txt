@@ -1,0 +1,37 @@
+DATA: lv_filename   TYPE string,
+        lv_path       TYPE string,
+        lv_fullpath   TYPE string,
+        lv_useraction TYPE i,
+        lt_texto      TYPE TABLE OF string.
+
+* Agrego el texto en una tabla
+  APPEND gv_txt_mat TO lt_texto.
+
+* Mostrar el cuadro de diálogo de descarga de archivos
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      default_extension         = 'TXT'
+      default_file_name         = 'Texto_Material.txt'
+    CHANGING
+      filename                  = lv_filename
+      path                      = lv_path
+      fullpath                  = lv_fullpath
+      user_action               = lv_useraction
+    EXCEPTIONS
+      cntl_error                = 1
+      error_no_gui              = 2
+      not_supported_by_gui      = 3
+      invalid_default_file_name = 4
+      OTHERS                    = 5.
+  IF lv_useraction <> 0.
+    EXIT.
+  ENDIF.
+
+* Descargo el archivo
+  CALL METHOD cl_gui_frontend_services=>gui_download
+    EXPORTING
+      filename = lv_filename
+    CHANGING
+      data_tab = lt_texto
+    EXCEPTIONS
+      OTHERS   = 24.

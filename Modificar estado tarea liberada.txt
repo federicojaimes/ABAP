@@ -1,0 +1,15 @@
+Ejecutamos la transacción SE37 y entramos el módulo de función SE16N_INTERFACE y hacemos click en el icono ejecutar en modo test.
+
+En la siguiente pantalla entramos los siguiente valores en los parámetros:
+
+I_TAB = E070
+
+I_EDIT = X
+
+I_SAPEDIT= X
+
+I_MAXLINES =
+
+Captura999.JPG
+
+Al ejecutar, nos mostrará una nueva pantalla. Buscamos nuestra tarea y cambiamos, en la columna status, el valor R por D y grabamos. Nuestra tarea vuelve a ser modificable.

@@ -1,0 +1,23 @@
+Agregar al ALV este campo
+t_color      TYPE lvc_t_scol.
+
+
+Donde se procesan los datos declarar esta tabla y estructura
+lt_color       TYPE lvc_t_scol,
+ls_color       TYPE lvc_s_scol.
+
+En la condicion que queremos que pinte la celda completamos con estos valores
+IF lw_alv-res_valuat EQ 'R'.
+ls_color-fname = 'RES_VALUAT'.  "NOMBRE DEL CAMPO A COLOREAR
+ls_color-color-col = 6.
+ls_color-color-int = 1.
+ls_color-color-inv = 0. 
+APPEND ls_color TO lt_color.
+
+Pasamos la tabla al campo que declaramos en el alv
+
+lw_alv-t_color = lt_color.
+
+
+Cuando definimos el layout le pasamos el nombre del campo del ALV
+lwa_layout-coltab_fieldname = 'T_COLOR'.

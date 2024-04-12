@@ -1,0 +1,10 @@
+DATA: lt_parametros   TYPE TABLE OF rsparams,
+        lwa_params      TYPE rsparams,
+        lt_param_clean  TYPE TABLE OF ty_param_clean,
+        lwa_param_clean TYPE ty_param_clean.
+
+  CALL FUNCTION 'RS_REFRESH_FROM_SELECTOPTIONS' "Capturo todos los parametros de la Pantalla de selección
+    EXPORTING
+      curr_report     = 'ZPMR_MOV_EQUIPOS'
+    TABLES
+      selection_table = lt_parametros.

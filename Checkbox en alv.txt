@@ -1,0 +1,14 @@
+LOOP AT gt_fieldcat INTO lw_fieldcat
+    WHERE fieldname EQ 'ONTIME'  OR
+          fieldname EQ 'INFULL'  OR
+          fieldname EQ 'OTIFOK'  OR
+          fieldname EQ 'NOSTO'   OR
+          fieldname EQ 'CCTTE'   OR
+          fieldname EQ 'LOGOR'   OR
+          fieldname EQ 'LOGDEST' OR
+          fieldname EQ 'NORUT'.
+          lw_fieldcat-checkbox = 'X'.
+
+    MODIFY gt_fieldcat FROM lw_fieldcat
+      INDEX sy-tabix TRANSPORTING checkbox input edit emphasize.
+  ENDLOOP.

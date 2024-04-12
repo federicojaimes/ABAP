@@ -1,0 +1,10 @@
+1 - Nos dirigimos a la transaccion SE37 (si no tenemos acceso a esta transaccion, ahi si que no tengo formula magica  )
+
+2- Ponemos la siguiente función: RS_HDSYS_CALL_TC_VARIANT
+
+3- Pulsamos F8
+
+4- Campo TCODE con la transaccion que necesitamos acceder
+Campo AUTHORITY_CHECK borrar la X
+
+5- F8

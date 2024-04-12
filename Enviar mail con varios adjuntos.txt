@@ -1,0 +1,119 @@
+types: t_soli_t      type table of soli.
+
+  data: li_addr        type bcsy_smtpa,
+        lcl_send_email type ref to cl_bcs,
+        li_message     type t_soli_t,
+        lw_message     like line of li_message,
+        lv_subject     type so_obj_des,
+        lcl_document   type ref to cl_document_bcs,
+        lcl_recipient  type ref to if_recipient_bcs,
+        lv_sent_to_all type os_boolean,
+        lcl_sender     type ref to cl_cam_address_bcs,
+        lv_sender      type adr6-smtp_addr,
+        ld_att_text    type xstring,
+        ld_att_text2   type xstring,
+        it_attachment  type solix_tab,
+        it_attachment2 type solix_tab,
+        ld_att_size    type so_obj_len,
+        ld_att_size2   type so_obj_len,
+        ld_att_type    type so_obj_tp value 'TXT',
+        ld_att_sub     type so_obj_des value 'Cabecera',
+        ld_att_sub2    type so_obj_des value 'Posiciones'.
+
+  field-symbols: <fs_mail> like line of gt_envio_mail,
+                 <fs_addr> like line of li_addr.
+
+  select mandt mail
+    from zenvio_mails
+    into table gt_envio_mail.
+
+* Recoge los emails y los añade a la tabla de destinatario
+  loop at gt_envio_mail assigning <fs_mail>.
+    append <fs_mail>-mail to li_addr.
+  endloop.
+
+* Inicialización de la clase
+  lcl_send_email = cl_bcs=>create_persistent( ).
+
+* Cuerpo del email
+  lw_message-line ='<p>Estimados, Se envían los TXT de logística.</p>'.
+  append lw_message to li_message.
+  clear: lw_message.
+  lw_message-line ='<p>Saludos Cordiales,</p>'.
+  append lw_message to li_message.
+  clear: lw_message.
+
+* Crear documento
+  select single contador
+  from zcont_log
+  into lv_proceso.
+
+  lv_proceso = lv_proceso + 1.
+
+  concatenate: 'ESA – Fact. LHERITIER ARGENTINA S.A. – Proc.' lv_proceso into lv_subject separated by space.
+
+  lcl_document =  cl_document_bcs=>create_document( i_type    =  'HTM'
+                                                    i_subject =  lv_subject
+                                                    i_text    =  li_message ).
+*Adjunto los TXT
+  concatenate gv_cabe_txt gv_cabe_txt2 into lv_cabecera separated by cl_abap_char_utilities=>newline.
+
+  call function 'SCMS_STRING_TO_XSTRING'
+    exporting
+      text   = lv_cabecera
+    importing
+      buffer = ld_att_text
+    exceptions
+      failed = 1
+      others = 2.
+  it_attachment  = cl_document_bcs=>xstring_to_solix( ld_att_text ).
+
+  call function 'SCMS_STRING_TO_XSTRING'
+    exporting
+      text   = gv_pos_txt
+    importing
+      buffer = ld_att_text2
+    exceptions
+      failed = 1
+      others = 2.
+  it_attachment2 = cl_document_bcs=>xstring_to_solix( ld_att_text2 ).
+
+  ld_att_size  = xstrlen( ld_att_text ).
+  ld_att_size2 = xstrlen( ld_att_text2 ).
+
+  call method lcl_document->add_attachment(
+    i_attachment_type = ld_att_type
+    i_attachment_subject = ld_att_sub
+    i_attachment_size = ld_att_size
+    i_att_content_hex = it_attachment ).
+
+  call method lcl_document->add_attachment(
+    i_attachment_type = ld_att_type
+    i_attachment_subject = ld_att_sub2
+    i_attachment_size = ld_att_size
+    i_att_content_hex = it_attachment2 ).
+
+* Enviar documento al email
+  lcl_send_email->set_document( lcl_document ).
+
+* Añadir remitente
+  lv_sender = 'mkloster@lheritier.com.ar'.
+  lcl_sender = cl_cam_address_bcs=>create_internet_address( lv_sender  ).
+  lcl_send_email->set_sender( i_sender = lcl_sender ).
+
+* Añadir destinatarios al email
+  loop at li_addr assigning <fs_addr>.
+    lcl_recipient = cl_cam_address_bcs=>create_internet_address( <fs_addr> ).
+    lcl_send_email->add_recipient( i_recipient = lcl_recipient ).
+  endloop.
+
+* Enviar email
+  lv_sent_to_all = lcl_send_email->send( i_with_error_screen = 'X' ).
+  commit work.
+
+  if lv_sent_to_all eq 'X'. "Envio correcto del mail, guardado del contador de mails enviados,
+                            "modificacion de la tabla Zhistoricos
+    message 'Se enviaron correctamente los mails' type 'S' display like 'S'.
+  else.
+    message 'Los mails no fueron enviados' type 'S' display like 'E'.
+  endif.

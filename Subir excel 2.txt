@@ -1,0 +1,40 @@
+DATA : lt_intern TYPE kcde_cells OCCURS 0 WITH HEADER LINE,
+           wa_intern TYPE kcde_cells.
+
+    CALL FUNCTION 'KCD_EXCEL_OLE_TO_INT_CONVERT'
+      EXPORTING
+        filename                = p_lcl
+        i_begin_col             = 1
+        i_begin_row             = 3
+        i_end_col               = 256
+        i_end_row               = 65000
+      TABLES
+        intern                  = lt_intern
+      EXCEPTIONS
+        inconsistent_parameters = 1
+        upload_ole              = 2
+        OTHERS                  = 3.
+  ENDIF.
+
+  LOOP AT lt_intern INTO wa_intern.
+    CASE wa_intern-col.
+      WHEN 1.
+        gs_outtab-belnr = wa_intern-value.
+
+      WHEN 2.
+        gs_outtab-bukrs = wa_intern-value.
+
+      WHEN 3.
+        gs_outtab-gjahr = wa_intern-value.
+
+      WHEN 4.
+        gs_outtab-bktxt = wa_intern-value.
+
+      WHEN 5.
+        gs_outtab-xref1  = wa_intern-value.
+
+    ENDCASE.
+    AT END OF row.
+      APPEND gs_outtab TO gt_outtab.
+      CLEAR gs_outtab.
+    ENDAT.

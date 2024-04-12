@@ -1,0 +1,3 @@
+DATA: lv_inver_date    TYPE tcurr-gdatu.
+
+CONVERT DATE <fs_cobk>-budat INTO INVERTED-DATE <fs_cobk>-fecha.

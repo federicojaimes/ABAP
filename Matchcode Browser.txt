@@ -1,0 +1,16 @@
+*En P_FILE va a quedar guardada la ruta del archivo
+PARAMETERS: P_FILE LIKE RLGRAP-FILENAME.
+
+*Llamamos a la función que abre el browser apretando el matchcode
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR P_FILE.
+   CALL FUNCTION ‘F4_FILENAME’
+      EXPORTING
+         PROGRAM_NAME = SY-REPID
+         DYNPRO_NUMBER = SY-DYNNR
+         FIELD_NAME = ‘PATH’
+      IMPORTING
+         FILE_NAME = P_FILE .
+
+
+Refresh
+USER-COMMAND ac

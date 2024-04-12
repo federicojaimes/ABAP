@@ -1,0 +1,14 @@
+DATA obj_alv_table TYPE REF TO cl_salv_table.
+
+  cl_salv_table=>factory( IMPORTING r_salv_table = obj_alv_table
+                          CHANGING  t_table      = gt_log ).  -------> tabla donde estan los datos
+ 
+
+  obj_alv_table->set_screen_popup(
+    start_column = 1
+    end_column   = 160
+    start_line   = 1
+    end_line     = 20 ).
+
+* Lanzamos el ALV
+  obj_alv_table->display( ).

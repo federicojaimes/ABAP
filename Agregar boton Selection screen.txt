@@ -1,0 +1,15 @@
+INITIALIZATION.
+  button1 = 'Datos Sociedades'.  "Descripcion del boton
+
+AT SELECTION-SCREEN.
+  CASE sscrfields.
+    WHEN 'BUT1'.
+      CALL TRANSACTION 'ZLIBRO_DIARIO'.
+  ENDCASE.
+
+
+
+---------------------- Selection screen/ TOP -----------------
+TABLES: sscrfields.
+SELECTION-SCREEN: PUSHBUTTON /1(18) button1 USER-COMMAND but1.
+

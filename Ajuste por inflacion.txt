@@ -1,0 +1,697 @@
+*--------------------------------------------------------------------*
+*  INFORMACION BASE
+*
+*  Nombre del Programa              : ZRFI_AXI_IMPOSITIVO
+*  Desarrollador                    : F.Jaimes
+*  Contacto funcional               : Laura Perez
+*  Creado el                        : 31.01.2023
+*  Nº Orden de transporte           : S4DK903261
+*  Descripcion                      : Generar el asiento de ajuste
+*                                     por inflación sobre cuentas
+*                                     de resultado y patrimonio neto
+*--------------------------------------------------------------------*
+
+
+INCLUDE zrfi_axi_impositivo_top.   "Declaraciones
+INCLUDE zrfi_axi_impositivo_selec. "Pantalla de selección
+INCLUDE zrfi_axi_impositivo_f01.   "Rutinas
+
+INITIALIZATION.
+  button1 = 'Cuentas Ajustables'.  "Descripcion del boton
+
+AT SELECTION-SCREEN.
+  CASE sscrfields.
+    WHEN 'BUT1'.
+      CALL TRANSACTION 'ZCUENTAS_AJUSTAB'.
+  ENDCASE.
+
+START-OF-SELECTION.
+
+  PERFORM f_selec_datos.
+  PERFORM f_procesar_datos.
+  IF gt_log IS NOT INITIAL.
+    PERFORM f_log_error.
+  ENDIF.
+  PERFORM f_mostrar_alv.
+
+---------------------------------- TOP ----------------------------------
+
+*&---------------------------------------------------------------------*
+*& Include          ZRFI_AXI_IMPOSITIVO_TOP
+*&---------------------------------------------------------------------*
+REPORT zrfi_axi_impositivo.
+**&---------------------------------------------------------------------*
+TYPES:BEGIN OF ty_faglflext,
+        ryear     TYPE gjahr,      "Ejercicio
+        racct     TYPE saknr,      "Número de cuenta
+        rbukrs    TYPE bukrs,      "Sociedad
+        rcntr     TYPE kostl,      "Centro de coste
+        prctr     TYPE prctr,      "Centro beneficio
+        segment   TYPE fb_segment, "Segmento para reporting de segmento
+        tslvt     TYPE tslvt12,    "Arrastre de saldos en moneda de transacción
+        tsl01     TYPE tslxx12,    "Total de movimientos del período en moneda transacción
+        tsl02     TYPE tslxx12,
+        tsl03     TYPE tslxx12,
+        tsl04     TYPE tslxx12,
+        tsl05     TYPE tslxx12,
+        tsl06     TYPE tslxx12,
+        tsl07     TYPE tslxx12,
+        tsl08     TYPE tslxx12,
+        tsl09     TYPE tslxx12,
+        tsl10     TYPE tslxx12,
+        tsl11     TYPE tslxx12,
+        tsl12     TYPE tslxx12,
+        tsl13     TYPE tslxx12,
+        tsl14     TYPE tslxx12,
+        tsl15     TYPE tslxx12,
+        tsl16     TYPE tslxx12,
+        timestamp TYPE timestamp,
+      END OF ty_faglflext,
+
+      BEGIN OF ty_cuentas_ajustables,
+        sociedad         TYPE zcuentas_ajustab-sociedad,
+        plan_cuentas     TYPE zcuentas_ajustab-plan_cuentas,
+        cuenta_origen	   TYPE zcuentas_ajustab-cuenta_origen,
+        cuenta_ajustable TYPE zcuentas_ajustab-cuenta_ajustable,
+        cuenta_axi       TYPE zcuentas_ajustab-cuenta_axi,
+      END OF ty_cuentas_ajustables,
+
+      BEGIN OF ty_skat,
+        saknr TYPE skat-saknr,
+        txt50 TYPE skat-txt50,
+      END OF ty_skat,
+
+      BEGIN OF ty_alv,
+        hkont         TYPE bsis-hkont,
+        txt50         TYPE skat-txt50,
+        neto_ajustado TYPE tslvt12,
+        ceco          TYPE kostl,
+        cebe          TYPE prctr,
+        segmento      TYPE fb_segment,
+        cuenta_axi    TYPE hkont,
+      END OF ty_alv,
+
+      BEGIN OF ty_log,
+        mensaje TYPE string,
+      END OF ty_log.
+
+**&---------------------------------------------------------------------*
+
+**&---------------------------------------------------------------------*
+TABLES:sscrfields, bsis.
+**&---------------------------------------------------------------------*
+
+**&---------------------------------------------------------------------*
+DATA: gt_cuentas_ajustables TYPE TABLE OF ty_cuentas_ajustables,
+      gt_faglflext          TYPE TABLE OF ty_faglflext,
+      gt_skat               TYPE TABLE OF ty_skat,
+      gt_alv                TYPE TABLE OF ty_alv,
+      gv_coeficiente        TYPE j_1ainft24-j_1ainddco,
+      gt_log                TYPE TABLE OF ty_log.
+**&---------------------------------------------------------------------*
+
+**&---------------------------------------------------------------------*
+CONSTANTS: c_ind_infl   TYPE c LENGTH 4 VALUE 'INFL',
+           c_version    TYPE c LENGTH 4 VALUE '0001',
+           c_inicio_mes TYPE c LENGTH 2 VALUE '01'.
+**&---------------------------------------------------------------------*
+
+
+------------------------- Pantalla Seleccion -------------------------
+*&---------------------------------------------------------------------*
+*& Include          ZRFI_AXI_IMPOSITIVO_SELEC
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN: PUSHBUTTON /1(18) button1 USER-COMMAND but1.
+SELECTION-SCREEN:BEGIN OF BLOCK b1.
+  PARAMETERS: p_planc  TYPE bsis-hkont.
+  SELECT-OPTIONS: p_cueaju FOR bsis-hkont.
+  PARAMETERS: p_bukrs  TYPE bkpf-bukrs,
+              p_gjahr  TYPE bkpf-gjahr,
+              p_peajus TYPE bkpf-monat,
+              p_fecha  TYPE bkpf-budat.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN SKIP 1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: r_test RADIOBUTTON GROUP r1 DEFAULT 'X',
+              r_real RADIOBUTTON GROUP r1.
+SELECTION-SCREEN END OF BLOCK b2.
+
+
+------------------------- F01 -------------------------
+*&---------------------------------------------------------------------*
+*& Include          ZRFI_AXI_IMPOSITIVO_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form f_selec_datos
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_selec_datos .
+  DATA: lv_gjahr          TYPE bkpf-gjahr,
+        lv_inicio_periodo TYPE dats,
+        lv_day_in         TYPE sy-datum,
+        lv_last_day       TYPE sy-datum,
+        lv_coef_mes_eje   TYPE j_1ainfcop,
+        lv_meses          TYPE t5a4a-dlymo.
+
+  SELECT sociedad plan_cuentas cuenta_origen cuenta_ajustable cuenta_axi
+    FROM zcuentas_ajustab
+    INTO TABLE gt_cuentas_ajustables
+    WHERE plan_cuentas  EQ p_planc
+    AND   cuenta_origen IN p_cueaju.
+  IF sy-subrc = 0.
+    SELECT ryear racct rbukrs rcntr prctr segment tslvt tsl01 tsl02
+           tsl03 tsl04 tsl05 tsl06 tsl07 tsl08 tsl09 tsl10 tsl11 tsl12
+           tsl13 tsl14 tsl15 tsl16 timestamp
+      FROM faglflext
+      INTO TABLE gt_faglflext
+      FOR ALL ENTRIES IN gt_cuentas_ajustables
+      WHERE ryear  EQ p_gjahr
+      AND   rbukrs EQ p_bukrs
+      AND   racct  EQ gt_cuentas_ajustables-cuenta_origen.
+
+    SORT gt_faglflext
+      BY racct rcntr
+      prctr segment. "Agregado 01.03
+
+    SELECT saknr txt50
+      FROM skat
+      INTO TABLE gt_skat
+      FOR ALL ENTRIES IN gt_cuentas_ajustables
+      WHERE saknr EQ gt_cuentas_ajustables-cuenta_origen.
+  ENDIF.
+
+  lv_gjahr = p_gjahr - 1.
+
+  CONCATENATE: lv_gjahr '07' '01' INTO lv_inicio_periodo . "Triunfo inicia el ejercicio en Julio de cada año
+
+  lv_meses = p_peajus - 1.
+
+  CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL' "Le agrego la cantidad de meses que estan cargados en periodo contable
+    EXPORTING                              "Para recuperar despues el coeficiente de dicho mes
+      date      = lv_inicio_periodo
+      days      = 00
+      months    = lv_meses
+      signum    = '+'
+      years     = 00
+    IMPORTING
+      calc_date = lv_day_in.
+
+  CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS' "Busco el ultimo dia del mes para traer el coeficiente de ese dia
+    EXPORTING
+      day_in            = lv_day_in
+    IMPORTING
+      last_day_of_month = lv_last_day
+    EXCEPTIONS
+      day_in_no_date    = 1
+      OTHERS            = 2.
+  IF sy-subrc = 0.
+
+* Recupero el Coeficiente del Mes de Ejecución
+    SELECT SINGLE j_1ainddco
+    INTO lv_coef_mes_eje
+    FROM j_1ainft24
+    WHERE j_1aindx   EQ c_ind_infl
+      AND j_1aversio EQ c_version
+      AND j_1aidatep EQ lv_last_day.
+  ENDIF.
+
+  gv_coeficiente = lv_coef_mes_eje - 1.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_procesar_datos
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_procesar_datos .
+
+  DATA:lt_faglflext_sum TYPE TABLE OF ty_faglflext,
+       lw_faglflext_sum TYPE ty_faglflext,
+       lw_alv           TYPE ty_alv,
+       lv_ajuste        TYPE char2.
+
+* Ajustes 24.02
+  DATA: lt_faglflext_aux TYPE TABLE OF ty_faglflext,
+        lw_faglflext_aux TYPE ty_faglflext.
+
+  LOOP AT gt_faglflext INTO DATA(lw_faglflext_new).
+    lw_faglflext_aux-ryear     = lw_faglflext_new-ryear.
+    lw_faglflext_aux-racct     = lw_faglflext_new-racct.
+    lw_faglflext_aux-rbukrs    = lw_faglflext_new-rbukrs.
+    lw_faglflext_aux-rcntr     = lw_faglflext_new-rcntr.
+    lw_faglflext_aux-prctr     = lw_faglflext_new-prctr.
+    lw_faglflext_aux-segment   = lw_faglflext_new-segment.
+    lw_faglflext_aux-timestamp = lw_faglflext_new-timestamp.
+    lw_faglflext_aux-tslvt     = lw_faglflext_aux-tslvt + lw_faglflext_new-tslvt.
+    lw_faglflext_aux-tsl01     = lw_faglflext_aux-tsl01 + lw_faglflext_new-tsl01.
+    lw_faglflext_aux-tsl02     = lw_faglflext_aux-tsl02 + lw_faglflext_new-tsl02.
+    lw_faglflext_aux-tsl03     = lw_faglflext_aux-tsl03 + lw_faglflext_new-tsl03.
+    lw_faglflext_aux-tsl04     = lw_faglflext_aux-tsl04 + lw_faglflext_new-tsl04.
+    lw_faglflext_aux-tsl05     = lw_faglflext_aux-tsl05 + lw_faglflext_new-tsl05.
+    lw_faglflext_aux-tsl06     = lw_faglflext_aux-tsl06 + lw_faglflext_new-tsl06.
+    lw_faglflext_aux-tsl07     = lw_faglflext_aux-tsl07 + lw_faglflext_new-tsl07.
+    lw_faglflext_aux-tsl08     = lw_faglflext_aux-tsl08 + lw_faglflext_new-tsl08.
+    lw_faglflext_aux-tsl09     = lw_faglflext_aux-tsl09 + lw_faglflext_new-tsl09.
+    lw_faglflext_aux-tsl10     = lw_faglflext_aux-tsl10 + lw_faglflext_new-tsl10.
+    lw_faglflext_aux-tsl11     = lw_faglflext_aux-tsl11 + lw_faglflext_new-tsl11.
+    lw_faglflext_aux-tsl12     = lw_faglflext_aux-tsl12 + lw_faglflext_new-tsl12.
+    lw_faglflext_aux-tsl13     = lw_faglflext_aux-tsl13 + lw_faglflext_new-tsl13.
+    lw_faglflext_aux-tsl14     = lw_faglflext_aux-tsl14 + lw_faglflext_new-tsl14.
+    lw_faglflext_aux-tsl15     = lw_faglflext_aux-tsl15 + lw_faglflext_new-tsl15.
+    lw_faglflext_aux-tsl16     = lw_faglflext_aux-tsl16 + lw_faglflext_new-tsl16.
+    AT END OF segment.
+      APPEND lw_faglflext_aux TO lt_faglflext_aux.
+      CLEAR lw_faglflext_aux.
+    ENDAT.
+  ENDLOOP.
+
+  lt_faglflext_sum[] = lt_faglflext_aux[].
+
+* Recorremos la tabla par sumar los saldos mensuales
+*  LOOP AT gt_faglflext INTO DATA(lw_faglflext).
+*    MOVE-CORRESPONDING lw_faglflext TO lw_faglflext_sum.
+*    COLLECT lw_faglflext_sum INTO lt_faglflext_sum.
+*  ENDLOOP.
+
+* Ajustes 24.02
+
+  IF lt_faglflext_sum IS NOT INITIAL.
+
+    CLEAR lw_faglflext_sum.
+
+    LOOP AT lt_faglflext_sum INTO lw_faglflext_sum.
+      lw_alv-hkont = lw_faglflext_sum-racct. "Cuenta contable
+      READ TABLE gt_skat INTO DATA(lw_skat) WITH KEY saknr = lw_faglflext_sum-racct.
+      IF sy-subrc = 0.
+        lw_alv-txt50 = lw_skat-txt50. "Nombre de cuenta contable
+      ENDIF.
+
+      lw_alv-segmento = lw_faglflext_sum-segment. "segmento del ajuste
+
+      lv_ajuste = p_peajus - 1.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = lv_ajuste
+        IMPORTING
+          output = lv_ajuste.
+
+
+      CASE lv_ajuste.
+        WHEN '00'.
+          lw_alv-neto_ajustado = lw_faglflext_sum-tslvt * gv_coeficiente.
+        WHEN '01'.
+          lw_alv-neto_ajustado = lw_faglflext_sum-tsl01 * gv_coeficiente.
+        WHEN '02'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ).
+        WHEN '03'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ).
+        WHEN '04'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ).
+        WHEN '05'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ).
+        WHEN '06'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ).
+        WHEN '07'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ).
+        WHEN '08'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ) + ( lw_faglflext_sum-tsl08 * gv_coeficiente ).
+        WHEN '09'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ) + ( lw_faglflext_sum-tsl08 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl09 * gv_coeficiente ).
+        WHEN '10'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ) + ( lw_faglflext_sum-tsl08 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl09 * gv_coeficiente ) + ( lw_faglflext_sum-tsl10 * gv_coeficiente ).
+        WHEN '11'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ) + ( lw_faglflext_sum-tsl08 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl09 * gv_coeficiente ) + ( lw_faglflext_sum-tsl10 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl11 * gv_coeficiente ).
+        WHEN '12'.
+          lw_alv-neto_ajustado = ( lw_faglflext_sum-tsl01 * gv_coeficiente ) + ( lw_faglflext_sum-tsl02 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl03 * gv_coeficiente ) + ( lw_faglflext_sum-tsl04 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl05 * gv_coeficiente ) + ( lw_faglflext_sum-tsl06 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl07 * gv_coeficiente ) + ( lw_faglflext_sum-tsl08 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl09 * gv_coeficiente ) + ( lw_faglflext_sum-tsl10 * gv_coeficiente ) +
+                                 ( lw_faglflext_sum-tsl11 * gv_coeficiente ) + ( lw_faglflext_sum-tsl12 * gv_coeficiente ).
+        WHEN OTHERS.
+          MESSAGE: 'El Periodo tiene que ser entre 00 y 12' TYPE 'S' DISPLAY LIKE 'E'.
+          LEAVE LIST-PROCESSING.
+      ENDCASE.
+
+
+      lw_alv-ceco = lw_faglflext_sum-rcntr.   " Detalle del ceco
+      IF lw_alv-ceco IS INITIAL.
+        lw_alv-cebe = lw_faglflext_sum-prctr.   " Detalle del cebe
+      ENDIF.
+
+      READ TABLE gt_cuentas_ajustables INTO DATA(lw_cuentas_ajustables) WITH KEY cuenta_origen = lw_faglflext_sum-racct.
+      IF sy-subrc = 0.
+        lw_alv-cuenta_axi = lw_cuentas_ajustables-cuenta_axi. "N° de cuenta AxI
+      ENDIF.
+
+      APPEND lw_alv TO gt_alv.
+      CLEAR: lw_alv, lw_cuentas_ajustables, lw_skat.
+    ENDLOOP.
+
+    DELETE gt_alv WHERE neto_ajustado IS INITIAL.
+
+    IF r_real IS NOT INITIAL AND p_fecha IS NOT INITIAL.
+      PERFORM p_generar_asientos.
+    ELSEIF r_real IS NOT INITIAL AND p_fecha IS INITIAL.
+      MESSAGE: 'Falta fecha para contabilizar' TYPE 'S' DISPLAY LIKE 'E'.
+    ENDIF.
+  ELSE.
+    MESSAGE: 'No se encontraron datos' TYPE 'S' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_mostrar_alv
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_mostrar_alv .
+
+  DATA: lo_functions    TYPE REF TO cl_salv_functions_list,
+        lo_alv          TYPE REF TO cl_salv_table,
+        lo_display      TYPE REF TO cl_salv_display_settings,
+        lo_columns      TYPE REF TO cl_salv_columns,
+        column          TYPE REF TO cl_salv_column,
+        lr_aggregations TYPE REF TO cl_salv_aggregations,
+        lr_groups       TYPE REF TO cl_salv_sorts,
+        not_found       TYPE REF TO cx_salv_not_found,
+        lv_titulo       TYPE text70,
+        lv_fecha        TYPE string.
+
+  TRY.
+      CALL METHOD cl_salv_table=>factory
+        EXPORTING
+          list_display = if_salv_c_bool_sap=>false
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_alv.
+    CATCH cx_salv_msg .
+  ENDTRY.
+
+  lo_columns = lo_alv->get_columns( ).
+  lo_columns->set_optimize( 'X' ).
+
+  lo_display = lo_alv->get_display_settings( ).
+  lo_display->set_striped_pattern( cl_salv_display_settings=>true ).
+
+  CONCATENATE: p_fecha+6(2) '/' p_fecha+4(2) '/' p_fecha(4) INTO lv_fecha.
+  CONCATENATE: 'Periodo de Ajuste:' p_peajus 'Fecha Contabilización' lv_fecha INTO lv_titulo SEPARATED BY space.
+  lo_display->set_list_header( lv_titulo ).
+
+  lo_functions = lo_alv->get_functions( ).
+  lo_functions->set_all( abap_true ).
+
+  lr_aggregations = lo_alv->get_aggregations( ).
+  lo_functions = lo_alv->get_functions( ) .
+  lo_functions->set_all(
+        value  = if_salv_c_bool_sap=>true
+         ).
+
+  lr_aggregations->clear( ).
+  lr_groups = lo_alv->get_sorts( ) .
+  lr_groups->clear( ).
+
+  TRY.
+      lr_groups->add_sort(
+     columnname = 'HKONT'
+     position   = 1
+     subtotal   = abap_true
+     sequence   = if_salv_c_sort=>sort_up ).
+
+    CATCH cx_salv_not_found cx_salv_data_error cx_salv_existing.
+  ENDTRY.
+  TRY.
+      lr_aggregations->add_aggregation( columnname = 'NETO_AJUSTADO' ).
+    CATCH cx_salv_not_found cx_salv_data_error cx_salv_existing.
+  ENDTRY.
+
+  TRY.
+      column = lo_columns->get_column( columnname = 'HKONT' ).
+      column->set_short_text( 'Cue. conts' ).
+      column->set_medium_text( 'Cuenta contable' ).
+      column->set_long_text( 'Cuenta contable' ).
+
+      column = lo_columns->get_column( columnname = 'TXT50' ).
+      column->set_short_text( 'Nomb. Cuen' ).
+      column->set_medium_text( 'Nomb. Cuen. Cont.' ).
+      column->set_long_text( 'Nombre de cuenta contable' ).
+
+      column = lo_columns->get_column( columnname = 'NETO_AJUSTADO' ).
+      column->set_short_text( 'Neto Ajus.' ).
+      column->set_medium_text( 'Neto Ajustado' ).
+      column->set_long_text( 'Neto Ajustado' ).
+
+      column = lo_columns->get_column( columnname = 'CUENTA_AXI' ).
+      column->set_short_text( 'Cuen. AxI' ).
+      column->set_medium_text( 'Cuenta AxI' ).
+      column->set_long_text( 'Cuenta AxI' ).
+    CATCH cx_salv_not_found INTO not_found.
+      " error handling
+  ENDTRY.
+
+  CALL METHOD lo_alv->display.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form p_generar_asientos
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM p_generar_asientos .
+
+  DATA: lw_doc_header  TYPE bapiache09,
+        lt_acc_gl      TYPE TABLE OF bapiacgl09,
+        lw_acc_gl      TYPE bapiacgl09,
+        lv_contador    TYPE numc10,
+        lv_contador2   TYPE numc10,
+        lt_curr_amount TYPE TABLE OF bapiaccr09,
+        lw_curr_amount TYPE bapiaccr09,
+        lt_return      TYPE TABLE OF bapiret2,
+        lv_OBJ_TYPE    TYPE bapiache09-obj_type,
+        lv_OBJ_KEY     TYPE bapiache09-obj_key,
+        lv_OBJ_SYS     TYPE bapiache09-obj_sys,
+        lw_log         TYPE ty_log.
+  CONSTANTS: co_txt        TYPE c LENGTH 3 VALUE 'Axi',
+             co_code       TYPE c LENGTH 4 VALUE '1000',
+             co_doc        TYPE c LENGTH 2 VALUE 'AI',
+             co_ref_doc    TYPE c LENGTH 3 VALUE 'AXI',
+             co_cuenta_axi TYPE c LENGTH 10 VALUE '0000440000',
+             co_curren     TYPE waers VALUE 'ARS'.
+
+
+*Llenado cabecera DOC
+  lw_doc_header-username   = sy-uname.
+  lw_doc_header-header_txt = co_txt.
+  lw_doc_header-comp_code  = co_code.
+  lw_doc_header-doc_date   = p_fecha.
+  lw_doc_header-pstng_date = p_fecha.
+  lw_doc_header-fis_period = p_peajus.
+  lw_doc_header-doc_type   = co_doc.
+  lw_doc_header-ref_doc_no = co_ref_doc.
+
+*Llenado Account GL
+  LOOP AT gt_alv INTO DATA(wa_alv).
+*Cuenta ajuste
+    lv_contador = lv_contador + 1.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = lv_contador
+      IMPORTING
+        output = lv_contador.
+
+    lw_acc_gl-itemno_acc = lv_contador.
+    READ TABLE gt_cuentas_ajustables INTO DATA(wa_cuen_ajus) WITH KEY cuenta_origen = wa_alv-hkont.
+    IF sy-subrc = 0.
+      lw_acc_gl-gl_account = wa_cuen_ajus-cuenta_ajustable.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = lw_acc_gl-gl_account
+        IMPORTING
+          output = lw_acc_gl-gl_account.
+    ENDIF.
+    lw_acc_gl-item_text = co_ref_doc.
+    lw_acc_gl-comp_code = co_code.
+    lw_acc_gl-fis_period = p_peajus.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = lw_acc_gl-fis_period
+      IMPORTING
+        output = lw_acc_gl-fis_period.
+
+    lw_acc_gl-fisc_year  = p_gjahr.
+    lw_acc_gl-pstng_date = p_fecha.
+    lw_acc_gl-costcenter = wa_alv-ceco.
+    IF lw_acc_gl-costcenter IS INITIAL.
+      lw_acc_gl-profit_ctr = wa_alv-cebe.
+    ENDIF.
+    lw_acc_gl-segment = wa_alv-segmento.
+    APPEND lw_acc_gl TO lt_acc_gl.
+
+* Agregado 23.02
+    CLEAR lw_acc_gl.
+* Agregado 23.02
+
+
+*Cuenta 44000
+    lv_contador = lv_contador + 1.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = lv_contador
+      IMPORTING
+        output = lv_contador.
+
+    lw_acc_gl-itemno_acc = lv_contador.
+    READ TABLE gt_cuentas_ajustables INTO wa_cuen_ajus WITH KEY cuenta_origen = wa_alv-hkont.
+    IF sy-subrc = 0.
+      lw_acc_gl-gl_account = wa_cuen_ajus-cuenta_axi.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = lw_acc_gl-gl_account
+        IMPORTING
+          output = lw_acc_gl-gl_account.
+    ENDIF.
+    lw_acc_gl-item_text = co_ref_doc.
+    lw_acc_gl-comp_code = co_code.
+    lw_acc_gl-fis_period = p_peajus.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = lw_acc_gl-fis_period
+      IMPORTING
+        output = lw_acc_gl-fis_period.
+
+    lw_acc_gl-fisc_year  = p_gjahr.
+    lw_acc_gl-pstng_date = p_fecha.
+    lw_acc_gl-costcenter = wa_alv-ceco.
+    IF lw_acc_gl-costcenter IS INITIAL.
+      lw_acc_gl-profit_ctr = wa_alv-cebe.
+    ENDIF.
+    lw_acc_gl-segment = wa_alv-segmento.
+    APPEND lw_acc_gl TO lt_acc_gl.
+
+* Agregado 23.02
+    CLEAR lw_acc_gl.
+* Agregado 23.02
+
+*Llenado Currency Amount. Tiene que tener siempre un movimiento de DEBE y HABER
+    lv_contador2 = lv_contador2 + 1.
+    lw_curr_amount-itemno_acc = lv_contador2.
+    lw_curr_amount-currency   = co_curren.
+    lw_curr_amount-amt_doccur = wa_alv-neto_ajustado.
+    APPEND lw_curr_amount TO lt_curr_amount.
+
+* Agregado 23.02
+    CLEAR lw_curr_amount.
+* Agregado 23.02
+
+    lv_contador2 = lv_contador2 + 1.
+    lw_curr_amount-itemno_acc = lv_contador2.
+    lw_curr_amount-currency   = co_curren.
+    lw_curr_amount-amt_doccur = wa_alv-neto_ajustado * -1.
+    APPEND lw_curr_amount TO lt_curr_amount.
+    CLEAR: lv_contador, lv_contador2, lw_curr_amount, lw_acc_gl.
+
+* Agregado 23.02
+    CLEAR lv_obj_type.
+    CLEAR lv_obj_key.
+    CLEAR lv_obj_sys.
+* Agregado 23.02
+
+    CALL FUNCTION 'BAPI_ACC_DOCUMENT_POST'
+      EXPORTING
+        documentheader = lw_doc_header
+      IMPORTING
+        obj_type       = lv_obj_type
+        obj_key        = lv_obj_key
+        obj_sys        = lv_obj_sys
+      TABLES
+        accountgl      = lt_acc_gl
+        currencyamount = lt_curr_amount
+        return         = lt_return.
+
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING
+        wait = abap_true.
+
+    REFRESH: lt_acc_gl, lt_curr_amount, lt_return.
+
+    LOOP AT lt_return INTO DATA(lw_return) WHERE type EQ 'E'.
+      lw_log-mensaje = lw_return-message.
+      APPEND lw_log TO gt_log.
+      CLEAR: lw_log.
+    ENDLOOP.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form f_log_error
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_log_error .
+
+  DATA obj_alv_table TYPE REF TO cl_salv_table.
+
+  cl_salv_table=>factory( IMPORTING r_salv_table = obj_alv_table
+                          CHANGING  t_table      = gt_log ).
+
+
+  obj_alv_table->set_screen_popup(
+    start_column = 1
+    end_column   = 160
+    start_line   = 1
+    end_line     = 20 ).
+
+* Lanzamos el ALV
+  obj_alv_table->display( ).
+
+ENDFORM.

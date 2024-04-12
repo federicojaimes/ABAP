@@ -1,0 +1,3 @@
+REPLACE_ALL <cadena> <cadena a buscar> <cadena de reemplazo>
+
+REPLACE_ALL <nombre_variable> '-' ''.

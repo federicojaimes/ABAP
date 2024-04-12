@@ -1,0 +1,10 @@
+SUBMIT zfif_op2     WITH p_bukrs  = ls_bkpf-bukrs
+                    WITH s_belnr  = ls_bkpf-belnr
+                    WITH p_gjahr  = ls_bkpf-gjahr
+                    WITH s_blart IN so_blart
+                    WITH s_budat IN so_budat
+                    WITH s_cpudt IN so_cpudt
+                    WITH s_xblnr IN so_xblnr
+                    WITH s_awtyp IN so_awtyp
+                    WITH s_awkey IN so_awkey
+                    AND RETURN.

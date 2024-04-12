@@ -1,0 +1,43 @@
+INITIALIZATION.
+
+  DATA : interval TYPE i VALUE 1.
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_receiver DEFINITION
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+CLASS lcl_receiver DEFINITION.
+  PUBLIC SECTION.
+    METHODS:
+      handle_finished FOR EVENT finished OF cl_gui_timer.
+ENDCLASS.                    "lcl_receiver DEFINITION
+
+DATA:
+  test     TYPE i,
+  receiver TYPE REF TO lcl_receiver,
+  timer    TYPE REF TO cl_gui_timer,
+  counter  TYPE i.
+
+CREATE OBJECT timer.
+CREATE OBJECT receiver.
+SET HANDLER receiver->handle_finished FOR timer.
+timer->interval = interval.
+*  call method timer->run.
+*----------------------------------------------------------------------*
+*       CLASS lcl_receiver IMPLEMENTATION
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+CLASS lcl_receiver IMPLEMENTATION.
+  METHOD handle_finished.
+    ADD interval TO counter.
+    IF NOT p_n01 IS INITIAL.
+      SET CURSOR FIELD 'P_N02'.
+    ENDIF.
+    CALL METHOD timer->run.
+  ENDMETHOD.                    "handle_finished
+ENDCLASS.                    "lcl_receiver IMPLEMENTATION
+
+AT SELECTION-SCREEN.
+  CALL METHOD timer->run.

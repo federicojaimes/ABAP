@@ -1,0 +1,29 @@
+CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'                    "#EC *
+    EXPORTING
+      i_callback_program      = sy-repid
+      is_layout               = is_layout
+      it_fieldcat             = it_fieldcat
+      i_save                  = 'A'
+      i_callback_user_command = 'USERCOMMAND'
+    TABLES
+      t_outtab                = it_mseg_mat
+    EXCEPTIONS
+      program_error           = 1
+      OTHERS                  = 2.
+
+
+FORM usercommand USING r_ucomm
+                       ls_selfield TYPE slis_selfield.      "#EC CALLED
+ 
+*&---Looking for Double click on ALV
+  IF r_ucomm = '&IC1'.
+    READ TABLE it_mseg_mat ASSIGNING <mseg> INDEX ls_selfield-tabindex.
+    IF sy-subrc = 0.
+        SET PARAMETER ID 'BLN' FIELD <mseg>-mblnr.
+        SET PARAMETER ID 'BUK' FIELD <mseg>-bukrs.
+        SET PARAMETER ID 'GJR' FIELD <mseg>-mjahr.
+ 
+        CALL TRANSACTION 'FB03' AND SKIP FIRST SCREEN.
+    ENDIF.
+  ENDIF.
+ENDFORM.                    "usercommand

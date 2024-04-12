@@ -1,0 +1,185 @@
+This report illustrates how to set chosen cells of an
+* ALV Grid Control editable. (See BCALV_EDIT_01 for an overview
+* of possible states).
+* Remark: You may set the states for chosen columns using field
+* EDIT of the fieldcatalog, see BCALV_EDIT_03.
+*-----------------------------------------------------------------
+* To check program behavior
+* ~~~~~~~~~~~~~~~~~~~~~~~~~
+* Switch to the state editable and ready for input.
+* You may then change the
+* price of flights where the capacity of a plane is greater or equal
+* than 300 seats.
+*-----------------------------------------------------------------
+* Essential steps (search for '§')
+* ~~~~~~~~~~~~~~~
+* 1.Extend your output table for a field, e.g., CELLTAB, that holds
+* information about the edit status of each cell for the
+* corresponding row (the table type is SORTED!).
+* 2.After selecting data, set edit status for each row in a loop
+* according to field SEATSMAX.
+* 2a.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_ENABLED to set a cell
+* to status "editable".
+* 2b.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_DISABLED to set a cell
+* to status "non-editable".
+* 2c.Copy your celltab to the celltab of the current row of gt_outtab.
+* 3.Provide the fieldname of the celltab field by using field
+* STYLEFNAME of the layout structure.
+*&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+DATA:
+  ok_code LIKE sy-ucomm,
+  save_ok LIKE sy-ucomm,
+  g_container TYPE scrfname VALUE 'BCALV_GRID_DEMO_0100_CONT1',
+  grid1 TYPE REF TO cl_gui_alv_grid,
+  g_custom_container TYPE REF TO cl_gui_custom_container,
+  gs_layout TYPE lvc_s_layo,
+  g_max TYPE i VALUE 100.
+*§1.Extend your output table for a field, e.g., CELLTAB, that holds
+* information about the edit status of each cell for the
+* corresponding row (the table type is SORTED!).
+DATA: BEGIN OF gt_outtab OCCURS 0. "with header line
+        INCLUDE STRUCTURE sflight.
+DATA: celltab TYPE lvc_t_styl.
+DATA: END OF gt_outtab.
+*---------------------------------------------------------------------*
+* MAIN *
+*---------------------------------------------------------------------*
+CALL SCREEN 100.
+*---------------------------------------------------------------------*
+* MODULE PBO OUTPUT *
+*---------------------------------------------------------------------*
+MODULE pbo OUTPUT.
+  SET PF-STATUS 'MAIN100'.
+  SET TITLEBAR 'MAIN100'.
+  IF g_custom_container IS INITIAL.
+    CREATE OBJECT g_custom_container
+      EXPORTING
+        container_name = g_container.
+    CREATE OBJECT grid1
+      EXPORTING
+        i_parent = g_custom_container.
+    PERFORM select_data_and_init_style.
+*§3.Provide the fieldname of the celltab field by using field
+* STYLEFNAME of the layout structure.
+    gs_layout-stylefname = 'CELLTAB'.
+    CALL METHOD grid1->set_table_for_first_display
+      EXPORTING
+        i_structure_name = 'SFLIGHT'
+        is_layout        = gs_layout
+      CHANGING
+        it_outtab        = gt_outtab[].
+  ENDIF.
+ENDMODULE.                    "pbo OUTPUT
+*---------------------------------------------------------------------*
+* MODULE PAI INPUT *
+*---------------------------------------------------------------------*
+MODULE pai INPUT.
+  save_ok = ok_code.
+  CLEAR ok_code.
+  CASE save_ok.
+    WHEN 'EXIT'.
+      PERFORM exit_program.
+    WHEN 'SWITCH'.
+      PERFORM switch_edit_mode.
+    WHEN OTHERS.
+* do nothing
+  ENDCASE.
+ENDMODULE.                    "pai INPUT
+*---------------------------------------------------------------------*
+* FORM EXIT_PROGRAM *
+*---------------------------------------------------------------------*
+FORM exit_program.
+  LEAVE PROGRAM.
+ENDFORM.                    "exit_program
+*&---------------------------------------------------------------------*
+*& Form SELECT_DATA_AND_INIT_STYLE
+*&---------------------------------------------------------------------*
+FORM select_data_and_init_style.
+  DATA: lt_sflight TYPE TABLE OF sflight WITH HEADER LINE,
+  lt_celltab TYPE lvc_t_styl,
+  l_index TYPE i.
+  SELECT * FROM sflight INTO TABLE lt_sflight UP TO g_max ROWS.
+* move corresponding fields from lt_sflight to gt_outtab
+  LOOP AT lt_sflight.
+    MOVE-CORRESPONDING lt_sflight TO gt_outtab.
+    APPEND gt_outtab.
+  ENDLOOP.
+*§2.After selecting data, set edit status for each row in a loop
+* according to field SEATSMAX.
+  LOOP AT gt_outtab.
+    l_index = sy-tabix.
+    REFRESH lt_celltab.
+    IF gt_outtab-seatsmax GE 300.
+      PERFORM fill_celltab USING 'RW'
+      CHANGING lt_celltab.
+    ELSE.
+      PERFORM fill_celltab USING 'RO'
+      CHANGING lt_celltab.
+    ENDIF.
+*§2c.Copy your celltab to the celltab of the current row of gt_outtab.
+    INSERT LINES OF lt_celltab INTO TABLE gt_outtab-celltab.
+    MODIFY gt_outtab INDEX l_index.
+  ENDLOOP.
+ENDFORM. " SELECT_DATA_AND_INIT_STYLE
+*&---------------------------------------------------------------------*
+*& Form FILL_CELLTAB
+*&---------------------------------------------------------------------*
+FORM fill_celltab USING value(p_mode)
+CHANGING pt_celltab TYPE lvc_t_styl.
+  DATA: ls_celltab TYPE lvc_s_styl,
+  l_mode TYPE raw4.
+* This forms sets the style of column 'PRICE' editable
+* according to 'p_mode' and the rest to read only either way.
+  IF p_mode EQ 'RW'.
+*§2a.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_ENABLED to set a cell
+* to status "editable".
+    l_mode = cl_gui_alv_grid=>mc_style_enabled.
+  ELSE. "p_mode eq 'RO'
+*§2b.Use attribute CL_GUI_ALV_GRID=>MC_STYLE_DISABLED to set a cell
+* to status "non-editable".
+    l_mode = cl_gui_alv_grid=>mc_style_disabled.
+  ENDIF.
+  ls_celltab-fieldname = 'CARRID'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'CONNID'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'FLDATE'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'PRICE'.
+  ls_celltab-style = l_mode.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'CURRENCY'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'PLANETYPE'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'SEATSMAX'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'SEATSOCC'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+  ls_celltab-fieldname = 'PAYMENTSUM'.
+  ls_celltab-style = cl_gui_alv_grid=>mc_style_disabled.
+  INSERT ls_celltab INTO TABLE pt_celltab.
+ENDFORM. " FILL_CELLTAB
+*&---------------------------------------------------------------------*
+*& Form SWITCH_EDIT_MODE
+*&---------------------------------------------------------------------*
+FORM switch_edit_mode.
+  IF grid1->is_ready_for_input( ) EQ 0.
+* set edit enabled cells ready for input
+    CALL METHOD grid1->set_ready_for_input
+      EXPORTING
+        i_ready_for_input = 1.
+  ELSE.
+* lock edit enabled cells against input
+    CALL METHOD grid1->set_ready_for_input
+      EXPORTING
+        i_ready_for_input = 0.
+  ENDIF.
+ENDFORM. " SWITCH_EDIT_MODE

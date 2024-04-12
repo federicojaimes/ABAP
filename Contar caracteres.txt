@@ -1,0 +1,3 @@
+DATA: V_INT TYPE INT4.
+
+V_INT = STRLEN( V_STR ).

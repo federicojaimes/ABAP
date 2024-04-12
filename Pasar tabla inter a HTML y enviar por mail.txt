@@ -1,0 +1,118 @@
+DATA: t_header      TYPE STANDARD TABLE OF w3head WITH HEADER LINE, "Header
+      t_fields      TYPE STANDARD TABLE OF w3fields WITH HEADER LINE, "Fields
+      t_html_x      TYPE STANDARD TABLE OF w3html, "Html
+      wa_header     TYPE w3head,
+      w_head        TYPE w3head,
+      it_sflight    TYPE TABLE OF ty_sflight, " Flights Details
+      wa_sflight    TYPE ty_sflight, " Flights Details
+      it_fcat       TYPE lvc_t_fcat WITH HEADER LINE, " Fieldcatalog
+      t_html        TYPE STANDARD TABLE OF soli ,
+      it_attachment TYPE solix_tab,
+      wa_receivers  TYPE uiys_iusr,
+      ld_subject    TYPE so_obj_des,
+      send_email    TYPE REF TO cl_bcs,
+      send_request  TYPE REF TO cl_send_request_bcs,
+      document      TYPE REF TO cl_document_bcs,
+      recipient     TYPE REF TO if_recipient_bcs.
+
+PARAMETERS: p_subjct TYPE string DEFAULT 'Subject',
+            p_bodtxt TYPE string DEFAULT 'main email body text',
+            p_recip TYPE string DEFAULT 'sreenith.sathian@diligentconsulting.co.in'.
+
+START-OF-SELECTION.
+
+  SELECT * FROM
+  sflight
+  INTO CORRESPONDING FIELDS OF TABLE it_sflight
+  UP TO 20 ROWS.
+
+  IF sy-subrc IS NOT INITIAL.
+    wa_sflight-carrid = 'AA'.
+    wa_sflight-connid = 'FL12'.
+    wa_sflight-fldate = '20150202'.
+    wa_sflight-price  = '3389'.
+    wa_sflight-currency = 'INR'.
+    APPEND wa_sflight TO it_sflight.
+    CLEAR wa_sflight.
+    wa_sflight-carrid = 'AA'.
+    wa_sflight-connid = 'AI34'.
+    wa_sflight-fldate = '20140305'.
+    wa_sflight-price  = '1500'.
+    wa_sflight-currency = 'INR'.
+    APPEND wa_sflight TO it_sflight.
+    CLEAR wa_sflight.
+    wa_sflight-carrid = 'AA'.
+    wa_sflight-connid = 'ID12'.
+    wa_sflight-fldate = '20150802'.
+    wa_sflight-price  = '3800'.
+    wa_sflight-currency = 'INR'.
+    APPEND wa_sflight TO it_sflight.
+    CLEAR wa_sflight.
+  ENDIF.
+*-Populate Fieldcatalog
+  it_fcat-coltext = 'Airline Code'.
+  APPEND it_fcat.
+  it_fcat-coltext = 'Connection Number'.
+  APPEND it_fcat.
+  it_fcat-coltext = 'Flight date'.
+  APPEND it_fcat.
+  it_fcat-coltext = 'Airfare'.
+  APPEND it_fcat.
+  it_fcat-coltext = 'Currency'.
+  APPEND it_fcat.
+  LOOP AT it_fcat.
+    w_head-text = it_fcat-coltext.
+*-Populate the Column Headings
+    CALL FUNCTION 'WWW_ITAB_TO_HTML_HEADERS'
+      EXPORTING
+        field_nr = sy-tabix
+        text     = w_head-text
+        fgcolor  = 'black'
+        bgcolor  = 'yellow'
+      TABLES
+        header   = t_header.
+*-Populate Column Properties
+    CALL FUNCTION 'WWW_ITAB_TO_HTML_LAYOUT'
+      EXPORTING
+        field_nr = sy-tabix
+        fgcolor  = 'black'
+        size     = '3'
+      TABLES
+        fields   = t_fields.
+  ENDLOOP.
+* -Title of the Display
+  wa_header-text = 'Flights Details' .
+  wa_header-font = 'Arial'.
+  wa_header-size = '2'.
+*-Preparing the HTML from Intenal Table
+  REFRESH t_html.
+  CALL FUNCTION 'WWW_ITAB_TO_HTML'
+    EXPORTING
+      table_header = wa_header
+    TABLES
+      html         = t_html_x
+      fields       = t_fields
+      row_header   = t_header
+      itable       = it_sflight.
+  ld_subject = p_subjct.
+* Create instance of the email class
+  send_email = cl_bcs=>create_persistent( ).
+* Create email document inc type, subject and boby text
+  document = cl_document_bcs=>create_document(
+  i_type = 'HTM'
+  i_subject = ld_subject
+  i_text = t_html_x ).
+* Assign document and all its details to the email
+  CALL METHOD send_email->set_document( document ).
+* Setup email recipient
+  wa_receivers-email = p_recip.
+  recipient = cl_cam_address_bcs=>create_internet_address( wa_receivers-email ).
+*Assign recipient to email
+  CALL METHOD send_email->add_recipient
+    EXPORTING
+      i_recipient = recipient
+      i_express   = 'X'.
+*Send email
+  CALL METHOD send_email->send( i_with_error_screen = 'X' ).
+* Commit work!!! This is important email will not get sent or appear in SOST without this
+  COMMIT WORK.

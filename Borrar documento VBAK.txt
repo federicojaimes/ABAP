@@ -1,0 +1,13 @@
+DATA :
+  f_headinx LIKE bapisdh1x,
+  t_ret type TABLE OF BAPIRET2.
+
+CLEAR f_headinx.
+f_headinx-updateflag = 'D'.
+
+CALL FUNCTION 'BAPI_SALESORDER_CHANGE'
+EXPORTING
+  salesdocument = lv_vbeln
+  order_header_inx = f_headinx
+TABLES
+  return = t_ret.

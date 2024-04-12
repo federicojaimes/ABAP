@@ -1,0 +1,68 @@
+Mostrar ALV
+
+Mostrar un ALV con el contenido de la tabla GT_REPORTE
+Si te interesa aprender otra forma de mostrar el reporte sin tener que codificar todo el catálogo y llamar a la función REUSE_ALV_*, podés hacerlo así también:
+
+    DATA: lo_functions    TYPE REF TO cl_salv_functions_list.
+    DATA: lo_alv          TYPE REF TO cl_salv_table.
+    DATA: lo_display      TYPE REF TO cl_salv_display_settings.
+    DATA: lo_columns      TYPE REF TO cl_salv_columns.
+    DATA column  TYPE REF TO cl_salv_column.
+    DATA columns TYPE REF TO cl_salv_columns_table.
+
+    TRY.
+        CALL METHOD cl_salv_table=>factory
+          EXPORTING
+            list_display = if_salv_c_bool_sap=>false
+          IMPORTING
+            r_salv_table = lo_alv
+          CHANGING
+            t_table      = gt_reporte.
+      CATCH cx_salv_msg .
+    ENDTRY.
+
+    lo_columns = lo_alv->get_columns( ).
+    lo_columns->set_optimize( 'X' ).
+
+    lo_display = lo_alv->get_display_settings( ).
+    lo_display->set_striped_pattern( cl_salv_display_settings=>true ).
+
+    lo_functions = lo_alv->get_functions( ).
+    lo_functions->set_all( abap_true ).
+
+    CALL METHOD lo_alv->display.
+
+-------------- Cambiar nombre a simbolos de texto --------------------
+
+DATA not_found TYPE REF TO cx_salv_not_found.
+
+  TRY.
+      column = lo_columns->get_column( columnname = 'HKONT' ).
+      column->set_short_text( 'Cue. conts' ).
+      column->set_medium_text( 'Cuenta contable' ).
+      column->set_long_text( 'Cuenta contable' ).
+    CATCH cx_salv_not_found INTO not_found.
+      " error handling
+  ENDTRY.
+
+-------------- Sumar columnas ------------------
+
+TRY.
+      lr_groups->add_sort(
+     columnname = 'HKONT'
+     position   = 1
+     subtotal   = abap_true
+     sequence   = if_salv_c_sort=>sort_up ).
+
+    CATCH cx_salv_not_found cx_salv_data_error cx_salv_existing.
+  ENDTRY.
+
+TRY.
+      lr_aggregations->add_aggregation( columnname = 'NETO_AJUSTADO' ).
+    CATCH cx_salv_not_found cx_salv_data_error cx_salv_existing.
+  ENDTRY.
+
+--------------- Cambiar titulo ---------------
+
+lo_display->set_list_header( lv_titulo ).
+

@@ -1,0 +1,40 @@
+*&---------------------------------------------------------------------
+*&      Form  F_STATUS
+*&---------------------------------------------------------------------
+FORM f_status USING rtextab TYPE slis_t_extab. "Llamada Status GUI
+
+  SET PF-STATUS 'ZSTANDARD' EXCLUDING rtextab.
+
+ENDFORM. "F_STATUS
+
+
+form user_command using V_UCOMM LIKE SY-UCOMM
+                          SEL_FLD TYPE SLIS_SELFIELD.
+  CASE V_UCOMM.
+    WHEN 'SHOW_DEL'.
+      read table it_final into wa_final index sel_fld-tabindex.
+      SET PARAMETER ID 'VL' field wa_final-VBELN.
+      CALL TRANSACTION 'VL03N' and skip first screen.
+     WHEN '&IC1' OR 'SHOW_SHIP'.
+     PERFORM DISPLAY.
+
+  endcase.
+endform.
+
+
+
+
+
+
+CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_user_command  = 'F_USER_COMMAND'
+      i_callback_program       = sy-repid
+      is_layout                = lwa_layout
+      it_fieldcat              = li_fieldcat[]
+      i_callback_pf_status_set = 'ZSTANDARD'
+    TABLES
+      t_outtab                 = gt_alv
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.

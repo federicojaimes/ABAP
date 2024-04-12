@@ -1,0 +1,172 @@
+*&---------------------------------------------------------------------*
+*& Report  ZVERIFICAR_TRANSPORTE
+*&
+*&---------------------------------------------------------------------*
+*& Programa de control que verifica las OTs que no pasaron a PRD
+*&--  SEIDOR - Miriam Maieru - 02.04.2020
+*&-------------------------------------------------------------------*
+REPORT  ZVERIFICAR_TRANSPORTE.
+
+
+INCLUDE: zverificar_transporte_top,
+         zverificar_transporte_f01.
+
+START-OF-SELECTION.
+
+  PERFORM f_extraer_ordenes.
+
+  PERFORM f_extraer_ruta.
+
+  PERFORM f_proceso.
+  
+  
+  
+  
+  
+  *&---------------------------------------------------------------------*
+*&  Include           ZVERIFICAR_TRANSPORTE_TOP
+*&---------------------------------------------------------------------*
+TABLES: e070.
+
+DATA: gw_e070    TYPE e070,
+      gt_e070    TYPE TABLE OF e070,
+      gw_tmscsys TYPE tmscsys,
+      gt_tmscsys TYPE TABLE OF tmscsys.
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+
+*PARAMETERS: p_user TYPE e070-as4user DEFAULT sy-uname,
+SELECT-OPTIONS: s_user FOR e070-as4user    DEFAULT sy-uname NO INTERVALS.
+PARAMETERS: p_dom      TYPE tmscsys-domnam DEFAULT 'DOMAIN_DEV' OBLIGATORY.
+
+SELECT-OPTIONS: s_date FOR e070-as4date OBLIGATORY.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+
+
+
+
+*&---------------------------------------------------------------------*
+*&  Include           ZVERIFICAR_TRANSPORTE_F01
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  F_EXTRAER_ORDENES
+*&---------------------------------------------------------------------*
+FORM f_extraer_ordenes.
+
+  SELECT * FROM e070
+    INTO TABLE gt_e070
+    WHERE ( trfunction = 'K' OR trfunction = 'W' )
+      AND trstatus = 'R'
+*      and as4user = p_user
+      AND as4user IN s_user
+      AND as4date IN s_date.
+
+  IF sy-subrc NE 0.
+* No se encuentran OTs
+    MESSAGE s208(00) WITH text-001.
+    LEAVE LIST-PROCESSING.
+
+  ENDIF.
+
+ENDFORM.                    " F_EXTRAER_ORDENES
+*&---------------------------------------------------------------------*
+*&      Form  F_EXTRAER_RUTA
+*&---------------------------------------------------------------------*
+*       Ruta de transporte.
+*----------------------------------------------------------------------*
+FORM f_extraer_ruta.
+
+  SELECT * FROM tmscsys
+    INTO TABLE gt_tmscsys
+    WHERE domnam = p_dom.
+
+  IF sy-subrc NE 0.
+* No se encontró ruta
+    MESSAGE s208(00) WITH text-002.
+    LEAVE LIST-PROCESSING.
+
+  ELSE.
+
+    DELETE gt_tmscsys WHERE sysnam = sy-sysid.
+    SORT   gt_tmscsys BY sysnam DESCENDING.
+
+  ENDIF.
+
+ENDFORM.                    " F_EXTRAER_RUTA
+*&---------------------------------------------------------------------*
+*&      Form  F_PROCESO
+*&---------------------------------------------------------------------*
+*       Proceso
+*----------------------------------------------------------------------*
+FORM f_proceso.
+
+  DATA: lt_cofi_lines TYPE TABLE OF tstrfcofil,
+        lw_cofi_lines TYPE tstrfcofil.
+
+* Recorremos las órdenes
+  LOOP AT gt_e070 INTO gw_e070.
+
+* Recorremos QAS; PRD
+    LOOP AT gt_tmscsys INTO gw_tmscsys.
+
+      REFRESH lt_cofi_lines.
+
+* Leemos el log de transporte
+      CALL FUNCTION 'TMS_MGR_GET_COFILE'
+        EXPORTING
+          iv_sysname           = gw_tmscsys-sysnam
+          iv_dirtype           = 'T'
+          iv_trkorr            = gw_e070-trkorr
+          iv_read_header       = 'X'
+        TABLES
+          tt_cofi_lines        = lt_cofi_lines
+        EXCEPTIONS
+          file_not_found       = 1
+          data_transfer_error  = 2
+          unknown_system       = 3
+          system_not_available = 4
+          unknown_service      = 5
+          tms_config_error     = 6
+          OTHERS               = 7.
+      IF sy-subrc <> 0.
+
+        WRITE: / gw_e070-trkorr, text-003, gw_tmscsys-sysnam.
+
+      ELSE.
+
+        DELETE lt_cofi_lines WHERE tarsystem NE gw_tmscsys-sysnam.
+        DELETE lt_cofi_lines WHERE function EQ '<'.
+        SORT lt_cofi_lines BY function trdate DESCENDING trtime DESCENDING.
+        DELETE ADJACENT DUPLICATES FROM lt_cofi_lines COMPARING tarsystem tarclient function.
+
+* Si hubo error en el ultimo transporte
+        CLEAR lw_cofi_lines.
+
+        IF lt_cofi_lines[] IS NOT INITIAL.
+
+          READ TABLE lt_cofi_lines INTO lw_cofi_lines WITH KEY retcode = '8'.
+          IF sy-subrc EQ 0.
+
+*            WRITE: / gw_e070-trkorr, 'Con error de transporte en', gw_tmscsys-sysnam.
+
+          ELSE.
+
+*            WRITE: / gw_e070-trkorr, 'Transportada correctamente en', gw_tmscsys-sysnam.
+
+          ENDIF.
+
+        ELSE.
+
+          WRITE: / gw_e070-trkorr, text-004, gw_tmscsys-sysnam.
+
+        ENDIF.
+
+      ENDIF.
+
+    ENDLOOP.
+  ENDLOOP.
+
+ENDFORM.                    " F_PROCESO

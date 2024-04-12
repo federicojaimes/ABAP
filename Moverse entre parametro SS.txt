@@ -1,0 +1,6 @@
+IF p_n12 IS NOT INITIAL.
+      IF screen-name EQ 'P_N12'.
+        SET CURSOR FIELD 'P_N13'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.

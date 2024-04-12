@@ -1,0 +1,13 @@
+* Función que saca los ceros a la izquierda de una variable
+CALL FUNCTION ‘CONVERSION_EXIT_ALPHA_OUTPUT’
+ EXPORTING
+  INPUT = VG_VARIABLE
+ IMPORTING
+  OUTPUT = VG_VARIABLE.
+
+* Función que completa con ceros a la izquierda de una variable
+CALL FUNCTION ‘CONVERSION_EXIT_ALPHA_INPUT’
+ EXPORTING
+  INPUT = VG_VARIABLE
+ IMPORTING
+  OUTPUT = VG_VARIABLE.

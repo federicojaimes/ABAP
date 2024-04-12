@@ -1,0 +1,88 @@
+* 01 - Antes de grabar los datos en la base de datos
+  DATA:
+    lr_log        TYPE REF TO zcl_ca_log,
+    l_tabix_total TYPE syst-tabix,
+    l_tabix_extr  TYPE syst-tabix,
+    ls_vista      TYPE zvfi_libctb_reg,
+    l_activ       TYPE activ_auth.
+
+  CREATE OBJECT lr_log.
+
+* Se actualizó algo?
+  IF <status>-upd_flag = abap_true.
+    LOOP AT total.
+      CLEAR: l_tabix_total,
+             l_tabix_extr,
+             ls_vista,
+             l_activ.
+
+*     Tomar en cuenta solo lineas modificadas
+
+      CHECK <action> <> original. "Sin cambios (BD)
+
+*     Tomar indices para actualizar campos solo lectura luego
+      IF <action> = neuer_eintrag OR "Nuevas
+         <action> = aendern.         "Modificadas
+
+        l_tabix_total = sy-tabix.
+
+        READ TABLE extract WITH KEY <vim_xtotal_key>.
+        IF sy-subrc = 0.
+          l_tabix_extr = sy-tabix.
+        ENDIF.
+      ENDIF.
+
+*     Validar autorizaciones
+      MOVE-CORRESPONDING total TO ls_vista.
+
+      CASE <action>.
+        WHEN neuer_eintrag.                 "Nuevas
+          l_activ = zcl_fi_libro_contable=>gc_activ_auth-crear.
+
+        WHEN aendern.                       "Modificadas
+          l_activ = zcl_fi_libro_contable=>gc_activ_auth-modificar.
+
+        WHEN geloescht OR update_geloescht. "Borradas sin cambios o Borradas luego de actualizar
+          l_activ = zcl_fi_libro_contable=>gc_activ_auth-borrar.
+      ENDCASE.
+
+      IF l_activ IS NOT INITIAL.
+        zcl_fi_libro_contable=>validar_autorizacion( EXPORTING  i_codigo    = ls_vista-codigo
+                                                                i_bukrs     = ls_vista-bukrs
+                                                                i_actividad = l_activ
+                                                     EXCEPTIONS ex_error    = 1 ).
+        IF sy-subrc <> 0.
+          lr_log->agregar_mensaje_sistema( ).
+        ENDIF.
+      ENDIF.
+
+*     Actualizar campos solo lectura
+      IF l_tabix_total IS NOT INITIAL.
+        ls_vista-erdat = sy-datum.
+        ls_vista-ertim = sy-uzeit.
+        ls_vista-erusr = sy-uname.
+
+        MOVE-CORRESPONDING ls_vista TO total.
+        MODIFY total INDEX l_tabix_total.
+
+        IF l_tabix_extr IS NOT INITIAL.
+          extract = total.
+          MODIFY extract INDEX l_tabix_extr.
+        ENDIF.
+      ENDIF.
+
+    ENDLOOP.
+  ENDIF.
+
+  IF lr_log->contiene_errores( ) = abap_true.
+    lr_log->mostrar_mensajes( ).
+
+    sy-subrc = 4. "No grabar
+  ELSE.
+*   ADVERTENCIA: Considerar correlatividad entre registros! Continuar grabando?
+    IF <status>-upd_flag = abap_true AND zcl_ca_util=>usuario_confirma( TEXT-z01 ) = abap_false.
+      sy-subrc = 4. "No grabar
+    ELSE.
+      sy-subrc = 0. "Necesario para que actualice en BD
+    ENDIF.
+  ENDIF.

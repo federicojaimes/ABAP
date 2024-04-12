@@ -1,0 +1,27 @@
+CLEAR: l_msgno.
+
+l_msgno = wa_msgcoll-msgnr.
+
+*-->> FM used for generating text message.
+
+CALL FUNCTION 'WRF_MESSAGE_TEXT_BUILD'
+
+EXPORTING
+
+p_msgid = wa_msgcoll-msgid
+
+p_msgno = l_msgno
+
+p_msgty = wa_msgcoll-msgtyp
+
+p_msgv1 = wa_msgcoll-msgv1
+
+p_msgv2 = wa_msgcoll-msgv2
+
+p_msgv3 = wa_msgcoll-msgv3
+
+p_msgv4 = wa_msgcoll-msgv4
+
+IMPORTING
+
+es_return = lwa_bapireturn1.

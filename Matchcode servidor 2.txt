@@ -1,0 +1,8 @@
+pc_file TYPE file_table-filename  
+
+  CALL FUNCTION '/SAPDMC/LSM_F4_SERVER_FILE'
+      IMPORTING
+        serverfile       = pc_file
+      EXCEPTIONS
+        canceled_by_user = 1
+        OTHERS           = 2.

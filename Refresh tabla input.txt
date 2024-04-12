@@ -1,0 +1,30 @@
+IF ref_grid IS INITIAL.
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            e_grid = ref_grid.
+      ENDIF.
+
+      IF NOT ref_grid IS INITIAL.
+        CALL METHOD ref_grid->check_changed_data
+          IMPORTING
+            e_valid = lv_valid.
+      ENDIF.
+
+LOOP AT gt_alv INTO lw_alv.
+        MOVE lw_alv-ebeln   TO lw_ctrl_ped_interpl-numdoc.
+        MOVE lw_alv-ebelp   TO lw_ctrl_ped_interpl-posicion.
+        MOVE lw_alv-on_time TO lw_ctrl_ped_interpl-ontime.
+        MOVE lw_alv-in_full TO lw_ctrl_ped_interpl-infull.
+        MOVE lw_alv-otif    TO lw_ctrl_ped_interpl-otifok.
+        MOVE lw_alv-nosto   TO lw_ctrl_ped_interpl-nosto.
+        MOVE lw_alv-cctte   TO lw_ctrl_ped_interpl-cctte.
+        MOVE lw_alv-logor   TO lw_ctrl_ped_interpl-logor.
+        MOVE lw_alv-logdest TO lw_ctrl_ped_interpl-logdest.
+        MOVE lw_alv-norut   TO lw_ctrl_ped_interpl-norut.
+        MODIFY zctrl_ped_interp FROM lw_ctrl_ped_interpl.
+        IF sy-subrc = 0.
+          COMMIT WORK AND WAIT.
+        ENDIF.
+        CALL METHOD ref_grid->refresh_table_display.
+      ENDLOOP.
+

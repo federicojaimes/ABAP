@@ -1,0 +1,38 @@
+ CONCATENATE lv_dir_name wa_dir_list-name INTO lv_name SEPARATED BY '/'.
+        CONCATENATE lv_dir_name2 wa_dir_list-name INTO lv_name2 SEPARATED BY '/'.
+
+        OPEN DATASET lv_name FOR INPUT IN TEXT MODE ENCODING DEFAULT WITH SMART LINEFEED IGNORING CONVERSION ERRORS.
+
+        IF sy-subrc = 0.
+
+          OPEN DATASET lv_name2 FOR OUTPUT IN TEXT MODE ENCODING DEFAULT WITH SMART LINEFEED IGNORING CONVERSION ERRORS.
+
+          IF sy-subrc = 0.
+
+            DO.
+              READ DATASET lv_name INTO l_newline.
+
+              IF sy-subrc = 0.
+
+                TRANSFER l_newline TO lv_name2.
+              ELSE.
+                IF l_newline IS NOT INITIAL.
+
+                  TRANSFER l_newline TO lv_name2.
+                ENDIF.
+                EXIT.
+              ENDIF.
+            ENDDO.
+          ENDIF.
+
+          CLOSE DATASET l_newline.
+
+        ELSE.
+
+          MESSAGE 'Imposible abrir el archivo' TYPE 'E'.
+
+        ENDIF.
+        CLOSE DATASET lv_name.
+        CLOSE DATASET lv_name2.
+        DELETE DATASET lv_name.
+      ENDIF.

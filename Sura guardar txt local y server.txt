@@ -1,0 +1,124 @@
+*&---------------------------------------------------------------------*
+*& Report ZRFI_DOC_DIARIOS
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zrfi_doc_diarios.
+
+INCLUDE zrfi_doc_diarios_top.
+INCLUDE zrfi_doc_diarios_sel.
+INCLUDE zrfi_doc_diarios_01.
+
+*Matchcode para local
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+CONCATENATE 'Reporte Documentos Diarios' sy-datum into lv_nombre.
+CALL FUNCTION 'WS_FILENAME_GET'
+    EXPORTING
+      def_filename     = lv_nombre
+      def_path         = 'C:\'
+      mask             = ',Textos,*.txt,Todos,*.*.'
+      mode             = 'O'
+      title            = TEXT-004
+    IMPORTING
+      filename         = p_file
+    EXCEPTIONS
+      inv_winsys       = 1
+      no_batch         = 2
+      selection_cancel = 3
+      selection_error  = 4
+      OTHERS           = 5.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file2.
+
+*Matchcode para el servidor
+  CALL FUNCTION '/SAPDMC/LSM_F4_SERVER_FILE'
+    EXPORTING
+      directory        = search_dir1
+      filemask         = c_fnh_mask1
+    IMPORTING
+      serverfile       = p_file2
+    EXCEPTIONS
+      canceled_by_user = 1
+      OTHERS           = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+START-OF-SELECTION.
+  PERFORM f_selec_datos.
+  PERFORM f_procesar_datos.
+  PERFORM f_catalogo.
+  PERFORM f_alv.
+
+
+
+
+
+
+*&---------------------------------------------------------------------*
+*& Form F_SAVE
+*&---------------------------------------------------------------------*
+*& Se ejecuta cuando eligen el CB de "Guardar Archivo"
+*&---------------------------------------------------------------------*
+FORM f_servidor.
+
+  DATA: l_archivo   TYPE string,
+        lv_cabecera TYPE string,
+        lv_lineas   TYPE string.
+
+  CONCATENATE p_file2 '/' sy-datum sy-uzeit '.TXT' INTO l_archivo.
+  CONDENSE l_archivo.
+
+  OPEN DATASET l_archivo FOR OUTPUT IN TEXT MODE ENCODING DEFAULT.
+  IF sy-subrc = 0.
+    CONCATENATE: 'Sociedad' 'Ejercicio' 'Numero de documento' 'Clase de Documentos' 'Clave Ref 2' INTO lv_cabecera
+    SEPARATED BY space.
+    TRANSFER lv_cabecera TO l_archivo.
+
+    LOOP AT gt_bkpf INTO wa_bkpf.
+      CONCATENATE wa_bkpf-bukrs wa_bkpf-gjahr wa_bkpf-belnr wa_bkpf-blart wa_bkpf-xref2_hd INTO lv_lineas
+    SEPARATED BY space RESPECTING BLANKS.
+      TRANSFER lv_lineas TO l_archivo.
+      CLEAR: lv_lineas, wa_bkpf.
+    ENDLOOP.
+    CLOSE DATASET l_archivo.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F_LOCAL
+*&---------------------------------------------------------------------*
+*& Guardo el archivo de forma LOCAL
+*&---------------------------------------------------------------------*
+FORM f_local .
+
+  DATA: lt_local TYPE TABLE OF ty_local,
+        lw_local TYPE ty_local.
+
+  CONCATENATE: 'Sociedad' 'Ejercicio' 'Numero de documento' 'Clase de Documentos' 'Clave Ref 2' INTO lw_local-linea
+    SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+  APPEND lw_local TO lt_local.
+  CLEAR lw_local.
+  LOOP AT gt_alv INTO wa_alv .
+    CONCATENATE wa_alv-bukrs wa_alv-gjahr wa_alv-belnr wa_alv-blart wa_alv-xref2_hd INTO lw_local-linea
+    SEPARATED BY cl_abap_char_utilities=>horizontal_tab RESPECTING BLANKS.
+    APPEND lw_local TO lt_local.
+    CLEAR lw_local.
+  ENDLOOP.
+
+  gv_filename = p_file.
+
+* Descargo el archivo
+  CALL METHOD cl_gui_frontend_services=>gui_download
+    EXPORTING
+      write_field_separator = space
+      filename              = gv_filename
+    CHANGING
+      data_tab              = lt_local
+    EXCEPTIONS
+      OTHERS                = 24.
+
+
+ENDFORM.

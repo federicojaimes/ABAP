@@ -1,0 +1,74 @@
+TYPES: BEGIN OF doc_lines.
+    INCLUDE STRUCTURE bseg.
+TYPES: END OF doc_lines.
+
+TYPES: ty_t_bdcft TYPE STANDARD TABLE OF bdcft.
+
+"Constantes.
+CONSTANTS: c_fnam1 TYPE fnam_____4 VALUE 'COBL-PRCTR',
+           c_fnam2 TYPE fnam_____4 VALUE 'COBL-SEGMENT'.
+
+FORM customer_fields_clear_cl TABLES p_t_exit_fields TYPE ty_t_bdcft
+                              USING p_s_line TYPE doc_lines.
+
+  "Estructuras locales.
+  DATA: ls_bseg  TYPE doc_lines,
+        ls_bdcft TYPE bdcft.
+
+
+  "Field symbols.
+  FIELD-SYMBOLS: <lfs_hkont> TYPE ANY TABLE.
+
+  ASSIGN ('(RFIDAREXRATEDIFF)SD_SAKNR[]') TO <lfs_hkont>.
+
+  CHECK sy-subrc EQ 0.
+
+  CLEAR: ls_bseg.
+  SELECT SINGLE *
+    FROM bseg
+    INTO ls_bseg
+    WHERE bukrs EQ p_s_line-bukrs AND
+          belnr EQ p_s_line-augbl AND
+          gjahr EQ p_s_line-augdt(4) AND
+          hkont IN <lfs_hkont>.
+
+  CHECK sy-subrc EQ 0.
+
+  CLEAR: ls_bdcft.
+  ls_bdcft-fnam = c_fnam1.
+  ls_bdcft-fval = ls_bseg-prctr.
+  APPEND ls_bdcft TO p_t_exit_fields.
+
+  CLEAR: ls_bdcft.
+  ls_bdcft-fnam = c_fnam2.
+  ls_bdcft-fval = ls_bseg-segment.
+  APPEND ls_bdcft TO p_t_exit_fields.
+
+ENDFORM.
+
+
+
+------------------------------------- enhacement RFIDAREXRATEDIFF form load_invoice_document ------------------------
+DATA: lv_mwskz      TYPE mwskz,
+      wa_memo_taxes TYPE tax_lines,
+      lv_kbetr      TYPE kbetr.
+
+FIELD-SYMBOLS <fs_memo_lines> type doc_lines.
+
+CLEAR lv_kbetr.
+LOOP AT gt_memo_taxes into wa_memo_taxes.
+  wa_memo_taxes-kbetr = wa_memo_taxes-kbetr / 10.
+  lv_kbetr = lv_kbetr + wa_memo_taxes-kbetr.
+ clear wa_memo_taxes.
+ENDLOOP.
+
+
+select SINGLE MWSKZ
+  from zindicador_iva
+  into lv_mwskz
+  where kbetr = lv_kbetr.
+  IF sy-subrc = 0.
+LOOP AT gt_memo_lines ASSIGNING <fs_memo_lines>.
+  <fs_memo_lines>-mwskz = lv_mwskz.
+endloop.
+  ENDIF.

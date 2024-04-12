@@ -1,0 +1,62 @@
+DATA: excel_app      TYPE ole2_object,
+      workbook       TYPE ole2_object,
+      worksheets     TYPE ole2_object,
+      worksheet      TYPE ole2_object,
+      cell_range     TYPE ole2_object,
+      filename       TYPE string,
+      cell_value     TYPE string.
+
+* Definir el nombre de archivo Excel a verificar
+filename = 'C:\Ruta\Al\Archivo\Excel.xlsx'.
+
+* Crear una instancia de la aplicación Excel
+CALL FUNCTION 'OLE2_CREATE'
+  EXPORTING
+    progid                   = 'Excel.Application'
+  IMPORTING
+    ole2_object              = excel_app
+  EXCEPTIONS
+    create_object_failed     = 1
+    class_not_found          = 2
+    others                   = 3.
+
+IF sy-subrc <> 0.
+  WRITE: 'No se pudo crear una instancia de Excel'.
+  EXIT.
+ENDIF.
+
+* Abrir el archivo Excel
+CALL METHOD OF excel_app 'Workbooks' = workbook
+  EXPORTING
+    #1 = filename.
+
+IF sy-subrc <> 0.
+  WRITE: 'No se pudo abrir el archivo Excel'.
+  EXIT.
+ENDIF.
+
+* Acceder a la primera hoja de trabajo (worksheet)
+CALL METHOD OF workbook 'Worksheets' = worksheets.
+CALL METHOD OF worksheets 'Item' = worksheet EXPORTING #1 = 1.
+
+* Verificar la integridad del archivo Excel leyendo un valor de celda
+CALL METHOD OF worksheet 'Cells' = cell_range EXPORTING #1 = 1 #2 = 1.
+CALL METHOD OF cell_range 'Value' = cell_value.
+
+IF cell_value IS INITIAL.
+  WRITE: 'El archivo Excel está vacío o dañado'.
+ELSE.
+  WRITE: 'El archivo Excel es válido y contiene datos:', cell_value.
+ENDIF.
+
+* Cerrar el archivo Excel y liberar recursos
+CALL METHOD OF workbook 'Close'.
+CALL METHOD OF excel_app 'Quit'.
+
+* Liberar objetos OLE
+CALL FUNCTION 'OLE2_RELEASE' EXPORTING ole2_object = cell_range.
+CALL FUNCTION 'OLE2_RELEASE' EXPORTING ole2_object = worksheet.
+CALL FUNCTION 'OLE2_RELEASE' EXPORTING ole2_object = worksheets.
+CALL FUNCTION 'OLE2_RELEASE' EXPORTING ole2_object = workbook.
+CALL FUNCTION 'OLE2_RELEASE' EXPORTING ole2_object = excel_app.
+

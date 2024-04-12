@@ -1,0 +1,7 @@
+LOOP AT gt_cabecera INTO wa_cabecera.
+    CONCATENATE gv_cabe_txt2 wa_cabecera-emplaza wa_cabecera-almacen wa_cabecera-ti_pedi wa_cabecera-cat_pedi wa_cabecera-suc_pedi
+    wa_cabecera-nro_pedi wa_cabecera-fecha_em wa_cabecera-cliente wa_cabecera-sub_cli wa_cabecera-razon_so wa_cabecera-domic
+    wa_cabecera-local wa_cabecera-prov wa_cabecera-cod_post wa_cabecera-ped_part wa_cabecera-fecha_en wa_cabecera-ref_a
+    wa_cabecera-ref_b wa_cabecera-val_fact wa_cabecera-val_cont wa_cabecera-cent_cos wa_cabecera-peso_tot
+    wa_cabecera-cuit wa_cabecera-iva cl_abap_char_utilities=>newline INTO gv_cabe_txt2 RESPECTING BLANKS.
+  ENDLOOP.

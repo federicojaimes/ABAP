@@ -1,0 +1,43 @@
+------------------ TOP -------------------------
+
+CLASS lcl_handle_events DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS:
+
+      on_double_click FOR EVENT double_click OF cl_salv_events_table
+
+        IMPORTING row column .
+
+ENDCLASS.
+
+------------------------ F01 -----------------------------------
+DATA: event_handler TYPE REF TO lcl_handle_events.
+  DATA: lr_events     TYPE REF TO cl_salv_events_table.
+  DATA: gr_events     TYPE REF TO lcl_handle_events.
+
+lr_events = lo_alv->get_event( ).
+  CREATE OBJECT gr_events.
+  SET HANDLER gr_events->on_double_click FOR lr_events.
+
+
+CLASS lcl_handle_events IMPLEMENTATION.
+
+  METHOD on_double_click.
+
+    DATA: row_c(4) TYPE c.
+
+    DATA: lr_selections TYPE REF TO cl_salv_selections.
+
+    row_c = row.
+
+    READ TABLE gt_zgl_0002 INDEX row_c INTO wa_zgl_0002.
+
+    SET PARAMETER ID 'AUN' FIELD wa_zgl_0002-numero_documento.
+
+    CALL TRANSACTION 'VA03' AND SKIP FIRST SCREEN.
+
+  ENDMETHOD. "on_double_click
+
+ENDCLASS.

@@ -1,0 +1,11 @@
+DATA: li_fieldcat  TYPE slis_t_fieldcat_alv,
+      lwa_fieldcat TYPE slis_fieldcat_alv,
+      lwa_layout   TYPE slis_layout_alv.
+
+
+
+CLEAR: lwa_fieldcat.
+  lwa_fieldcat-fieldname      = 'TXT50'.
+  lwa_fieldcat-tabname        = 'GT_ALV'.
+  lwa_fieldcat-seltext_l      = TEXT-002.
+  APPEND lwa_fieldcat TO li_fieldcat.

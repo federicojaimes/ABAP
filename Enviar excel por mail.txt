@@ -1,0 +1,84 @@
+REPORT ZSENDEXCELFILE.
+DATA: d_subject   TYPE so_obj_des,
+      d_body      TYPE string,
+      d_body_hex  TYPE xstring,
+      d_xls_fname TYPE so_obj_des,
+      d_xls_attch TYPE string,
+      d_row       TYPE string,
+      d_recpt     TYPE ad_smtpadr,
+      t_body_bin  TYPE solix_tab,
+      t_xls_attch TYPE soli_tab.
+ 
+DATA : lo_send  TYPE REF TO cl_bcs,
+       lo_docu  TYPE REF TO cl_document_bcs,
+       lo_recv  TYPE REF TO if_recipient_bcs.
+ 
+CLASS cl_bcs DEFINITION LOAD.
+lo_send = cl_bcs=>create_persistent( ).
+ 
+"set subject email
+d_subject = 'Send email with xls attachment'.
+ 
+"set body email
+d_body = 'Hi, please check the attachment.'.
+CALL FUNCTION 'SCMS_STRING_TO_XSTRING'
+  EXPORTING
+    text   = d_body
+  IMPORTING
+    buffer = d_body_hex.
+ 
+CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+  EXPORTING
+    buffer     = d_body_hex
+  TABLES
+    binary_tab = t_body_bin.
+ 
+"build body email
+lo_docu = cl_document_bcs=>create_document( i_type    = 'HTM'
+                                            i_hex     = t_body_bin
+                                            i_subject = d_subject ).
+ 
+"excel filename
+d_xls_fname = 'Material Master Data.xls'.
+ 
+"create attachment
+CONCATENATE 'Material Number'
+            'Material Type'
+            INTO d_row SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+CONCATENATE d_row cl_abap_char_utilities=>newline INTO d_xls_attch.
+ 
+CONCATENATE 'XJKL01'
+            'ZMT1'
+            INTO d_row SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+CONCATENATE d_xls_attch d_row cl_abap_char_utilities=>newline INTO d_xls_attch.
+ 
+CONCATENATE 'XJKL02'
+            'ZMT2'
+            INTO d_row SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+CONCATENATE d_xls_attch d_row cl_abap_char_utilities=>newline INTO d_xls_attch.
+ 
+CALL METHOD cl_document_bcs=>string_to_soli
+  EXPORTING
+    ip_string = d_xls_attch
+  RECEIVING
+    rt_soli   = t_xls_attch.
+ 
+CALL METHOD lo_docu->add_attachment
+  EXPORTING
+    i_attachment_type    = 'XLS'
+    i_attachment_subject = d_xls_fname
+    i_att_content_text   = t_xls_attch.
+ 
+"recipient - to & cc
+d_recpt = 'putyouremail@here.com'.
+lo_recv = cl_cam_address_bcs=>create_internet_address( d_recpt ).
+ 
+*sending email
+lo_send->set_document( lo_docu ).
+lo_send->add_recipient( EXPORTING i_recipient = lo_recv ).
+lo_send->add_recipient( EXPORTING i_recipient = lo_recv i_copy = 'X' ).
+CALL METHOD lo_send->set_send_immediately
+  EXPORTING
+    i_send_immediately = 'X'.
+lo_send->send( ).
+COMMIT WORK.

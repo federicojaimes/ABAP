@@ -1,0 +1,61 @@
+DATA: lt_return         TYPE TABLE OF bapiret2,
+        lw_return         TYPE bapiret2,
+        gd_spool_nr_aux   TYPE itcpp-tdspoolid,
+        gd_spool_nr       LIKE tsp01-rqident,
+        gd_buffer         TYPE string,
+        numbytes          TYPE i,
+        lv_rqident        TYPE rspoid,
+        tp_buffer         TYPE STANDARD TABLE OF soli,
+        tp_buffer_pdf     TYPE STANDARD TABLE OF tline WITH HEADER LINE,
+        lv_xstring        TYPE xstring,
+        lv_spoolid(10)    TYPE c.
+
+
+SUBMIT zacfir0017
+    WITH s_bukrs = c_acin
+    WITH s_kunnr = header-i_kunnr
+    WITH s_lote  = salida_web-lote
+    WITH p_imp   = abap_true
+    WITH p_mail  = abap_false
+    AND RETURN
+    EXPORTING LIST TO MEMORY.
+
+    GET PARAMETER ID 'SPOOL_ZACFIR0017' FIELD lv_spoolid.
+    IF lv_spoolid IS NOT INITIAL.
+      lv_rqident = lv_spoolid.
+      CALL FUNCTION 'RSPO_RETURN_SPOOLJOB'
+        EXPORTING
+          rqident              = lv_rqident
+          desired_type         = 'PDF'
+        TABLES
+          buffer               = tp_buffer
+          buffer_pdf           = tp_buffer_pdf
+        EXCEPTIONS
+          no_such_job          = 1
+          job_contains_no_data = 2
+          selection_empty      = 3
+          no_permission        = 4
+          can_not_access       = 5
+          read_error           = 6
+          type_no_match        = 7
+          OTHERS               = 8.
+      IF sy-subrc = 0.
+
+        lv_spool = lv_spoolid.
+        CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'       ------> Borra el spool para que no aparezca para descargar
+          EXPORTING
+            spoolid = lv_spool.
+
+        CHECK NOT tp_buffer_pdf[] IS INITIAL.
+
+        LOOP AT tp_buffer_pdf.
+          ASSIGN tp_buffer_pdf
+              TO <x>
+              CASTING TYPE x.
+          CONCATENATE lv_xstring
+                      <x>
+                 INTO lv_xstring
+                 IN BYTE MODE.
+        ENDLOOP.
+        receipt-spoolnr = lv_spoolid.
+        receipt-pdf     = lv_xstring.

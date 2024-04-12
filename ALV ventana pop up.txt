@@ -1,0 +1,16 @@
+IF pe_ucomm EQ 'LOG'.
+
+    lwa_layout-zebra   = 'X'.
+    lwa_layout-colwidth_optimize  = 'X'.
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_grid_title          = 'Log Errores'
+        i_structure_name      = 'ZAR_NC_LOG'
+        i_screen_start_column = 10
+        i_screen_start_line   = 20
+        i_screen_end_column   = 100
+        i_screen_end_line     = 40
+      TABLES
+        t_outtab              = gt_log.
+  ENDIF.

@@ -1,0 +1,7 @@
+CALL METHOD <fs_items>-item->if_longtexts_mm~get_text
+          EXPORTING
+            im_tdid           = 'F01'
+*           im_texttype       =
+          IMPORTING
+            ex_textlines      = DATA(lv_prueba)
+            ex_text_formatted = DATA(lv_prueba2).

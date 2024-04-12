@@ -1,0 +1,22 @@
+it_message     TYPE esp1_message_tab_type,
+lw_message     TYPE esp1_message_wa_type
+
+
+
+LOOP AT ls_return_bapi INTO lw_return_bapi WHERE type = 'E'.
+      lw_message-msgno = '000'.
+      lw_message-msgid = 'E4'.
+      lw_message-msgty = 'E'.
+      lw_message-msgv1 = lw_return_bapi-message(50).
+      lw_message-msgv2 = lw_return_bapi-message+50(50).
+      lw_message-msgv3 = lw_return_bapi-message+100(50).
+      lw_message-msgv4 = lw_return_bapi-message+150(50).
+      lv_lineno = lv_lineno + 1.
+      lw_message-lineno = lv_lineno.
+      APPEND lw_message TO it_message.
+      CLEAR: lw_message, lv_exito,lw_return_bapi.
+
+
+CALL FUNCTION 'C14Z_MESSAGES_SHOW_AS_POPUP'
+    TABLES
+      i_message_tab = it_message.

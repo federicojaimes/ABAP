@@ -1,0 +1,57 @@
+1- Crear la estrcutura ZSJSON_QR
+2- Verificar en la SE24 si existe /UI2/CL_ABAP2JSON
+3- Crear clase correspondiente ZCL_QR_AFIP_FACTURA (QR Afip Factura)Queda todo igual- Basado en codigo fuente
+
+4- Transaccion SE73 *Cod Barras Sistema - Modificar
+                    *Papelito Blanco
+                    *Nuevo - Codigo de barra 2005/QR Code 2005
+                    *Normal
+                    *Probar con L - 11
+5- Ingresar a smartforms
+* Atributos fomrulario - Opciones de salida - Estilo(ingresar a smartstyles) - Formato de carateres - modificar nombre con el qr creado en la SE73
+6- Definiciones globales crear variable gv_qr char1024
+7- Comentar codigo de barra 1 = 2
+8- Crear ventana de QR, Crear linea de codigo (Inicializacion) - Agregar variable a parametros de entrada
+DATA: lo_obj    TYPE REF TO zcl_qr_afip_factura,
+      lv_string TYPE string.
+
+CLEAR gv_qr.
+
+CREATE OBJECT lo_obj.
+
+lo_obj->get_qr_sd_vbeln(
+  EXPORTING
+    is_vbeln   = is_vbrk-vbeln
+  IMPORTING
+    ex_qr_code = lv_string ).
+
+gv_qr = lv_string.
+
+8B- Crear texto QR
+<QR>&GV_QR(255)&&GV_QR+255(255)&&GV_QR+510(255)&</></>
+
+
+------------------------------------------------
+Version 2.0
+GV_QR_CODE	TYPE	CHAR1024
+GV_CODE255	TYPE	CHAR255
+
+data: lv_qrcode TYPE string.
+
+  CALL METHOD zcl_qr_afip_factura=>GET_QR_SD_INVOICE
+    EXPORTING
+      IS_INVOICE = is_bil_invoice
+    IMPORTING
+      EX_QR_CODE = lv_qrcode.
+
+  gv_qr_code = lv_qrcode.
+
+  gv_code255 = gv_qr_code+255(255).
+
+
+Texto QR
+Include (so10) ZQR
+<QR>&gv_qr_code(255)&&gv_code255(C)&</>
+
+Correr programa RSTXTRAN
+Colocar numero de Tarea - buscar el texto creado - Enter - pasar a txt a correc.

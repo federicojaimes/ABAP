@@ -1,0 +1,59 @@
+1. SLG0-El primer paso es crear el objeto y sub-objeto log
+Es una forma de clasificar los logs , deberemos dar un nombre al objeto y subobjeto con el que luego crearemos nuestro log.
+
+
+2. Modulos de funciones Application Log
+Podemos usar varias funciones para crear el log, todas ellas empiezan por BAL_LOG*, las más importantes y en el orden que debemos utilizarlas son:
+
+DATA: ls_log_header TYPE bal_s_log,                       
+      gv_log_handle TYPE balloghndl.    
+
+CALL FUNCTION ‘BAL_LOG_CREATE’   
+EXPORTING     
+i_s_log                 = ls_log_header   
+IMPORTING     
+e_log_handle            = gv_log_handle   
+EXCEPTIONS     
+log_header_inconsistent = 1     
+OTHERS                  = 2. 
+
+ IF sy-subrc <> 0. ENDIF.  
+
+
+Iniciar el Log -> BAL_LOG_CREATE
+En primer lugar, debemos abrir el log con este módulo de funciones, pasándole la estructura de la cabecera del log (ls_log_header) que contendrá entre otras cosas el nombre del objeto y subobjeto que hemos creado previamente.
+
+Añadir mensajes al Log:
+BAL_LOG_MSG_ADD  , BAL_LOG_MSG_ADD_FREE_TEXT  , BAL_LOG_MSG_CUMULATE
+
+CALL FUNCTION ‘BAL_LOG_MSG_ADD_FREE_TEXT’
+    EXPORTING
+      i_log_handle     = gv_log_handle
+      i_msgty          = lv_tipo     *Puede ser ‘E’,’W’,’A’,’S’
+      i_probclass      = lv_probclass
+      i_text           = lv_texto
+    EXCEPTIONS
+      log_not_found    = 1
+      msg_inconsistent = 2
+      log_is_full      = 3
+      OTHERS           = 4.
+  IF sy-subrc <> 0.
+  ENDIF.  
+
+
+Grabar el Log:
+Para poder consultar el log que hemos creado desde la transacción SLG1 tenemos que guardarlo. Si no lo hacemos el log solamente estará disponible durante la ejecución del programa, puede ser útil si solo queremos ver el resultado cuando termine de ejecutarse el programa y si este se ejecuta en modo online. Al guardar el log, se le asigna un número, durante la ejecución del programa este número es temporal.
+
+    CALL FUNCTION ‘BAL_DB_SAVE’
+      EXPORTING
+        i_save_all       = ‘X’
+      EXCEPTIONS
+        log_not_found    = 1
+        save_not_allowed = 2
+        numbering_error  = 3
+        OTHERS           = 4.  
+
+Mostrar el resultado del Log:
+call function ‘BAL_DSP_LOG_DISPLAY’     
+exceptions        
+others                 = 1.

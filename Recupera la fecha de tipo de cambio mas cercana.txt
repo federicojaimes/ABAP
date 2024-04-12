@@ -1,0 +1,18 @@
+DATA: lv_fecha_cercana TYPE sy-datum.
+
+CALL FUNCTION 'READ_EXCHANGE_RATE'
+                    EXPORTING
+                      date             = lw_cobk-budat
+                      foreign_currency = 'USD'
+                      local_currency   = 'ARS'
+                      type_of_rate     = 'M'
+                    IMPORTING
+                      valid_from_date  = lv_fecha_cercana
+                    EXCEPTIONS
+                      no_rate_found    = 1
+                      no_factors_found = 2
+                      no_spread_found  = 3
+                      derived_2_times  = 4
+                      overflow         = 5
+                      zero_rate        = 6
+                      OTHERS           = 7.

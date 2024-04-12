@@ -1,0 +1,128 @@
+TYPES: BEGIN OF es_excel,
+           matnr         TYPE    char255,
+           maktx         TYPE    char255,
+           werks         TYPE    char255,
+           vkorg         TYPE    char255,
+           vtweg         TYPE    char255,
+           kbetr_precio  TYPE    char255,
+           kmein         TYPE    char255,
+           kbetr_desc    TYPE    char255,
+           konwa         TYPE    char255,
+           datab         TYPE    char255,
+           datbi         TYPE    char255,
+           kbetr         TYPE    char255,
+           kbetr1        TYPE    char255,
+           kbetr2        TYPE    char255,
+           kbetr3        TYPE    char255,
+           lvorm         TYPE    char255,
+           mstae         TYPE    char255,
+           mstav         TYPE    char255,
+           valor_neto    TYPE    char255,
+           valor_total   TYPE    char255,
+           waers         TYPE    char255,
+           importe_bruto TYPE    char255,
+           importe_neto  TYPE    char255,
+           taxib         TYPE    char255,
+         END OF es_excel.
+
+  DATA: lt_excel TYPE STANDARD TABLE OF es_excel,
+        ls_excel TYPE es_excel.
+
+
+DATA: lv_filename TYPE string.
+
+
+*" Agrego la cabecera
+    ls_excel-matnr        = 'Material'.
+    ls_excel-maktx        = 'Descripción'.
+    ls_excel-werks        = 'Centro'.
+    ls_excel-vkorg        = 'Organización de ventas'.
+    ls_excel-vtweg        = 'Canal de distribución'.
+    ls_excel-kbetr_precio = 'Precio'.
+    ls_excel-kmein        = 'Unidad de medida'.
+    ls_excel-kbetr_desc   = 'Descuento'.
+    ls_excel-konwa        = 'Moneda'.
+    ls_excel-datab        = 'Fecha válido desde'.
+    ls_excel-datbi        = 'Fecha válido hasta'.
+    ls_excel-kbetr        = 'Flete ZFLI'.
+    ls_excel-kbetr1       = 'Flete ZRL1'.
+    ls_excel-kbetr2       = 'Flete ZRL2'.
+    ls_excel-kbetr3       = 'Flete ZRL3'.
+    ls_excel-lvorm        = 'Petición de borrado'.
+    ls_excel-mstae        = 'Status bloqueo Compras'.
+    ls_excel-mstav        = 'Status bloqueo Ventas'.
+    ls_excel-valor_neto   = 'Valor Neto'.
+    ls_excel-valor_total  = 'Valor Total'.
+    ls_excel-waers        = 'Tipo Moneda'.
+    ls_excel-importe_bruto = 'Importe bruto en tipo de moneda'.
+    ls_excel-importe_neto  = 'Importe neto en tipo de moneda'.
+    ls_excel-taxib         = 'IVA'.
+    APPEND ls_excel TO lt_excel.
+
+
+*" Completo la tabla Excel con la gt_salida
+    LOOP AT gt_salida INTO gs_salida..
+      CLEAR ls_excel.
+
+      MOVE: gs_salida-matnr        TO ls_excel-matnr ,
+            gs_salida-maktx        TO ls_excel-maktx,
+            gs_salida-werks        TO ls_excel-werks,
+            gs_salida-vkorg        TO ls_excel-vkorg,
+            gs_salida-vtweg        TO ls_excel-vtweg,
+            gs_salida-kbetr_precio TO ls_excel-kbetr_precio,
+            gs_salida-kmein        TO ls_excel-kmein,
+            gs_salida-kbetr_desc   TO ls_excel-kbetr_desc,
+            gs_salida-konwa        TO ls_excel-konwa,
+            gs_salida-datab        TO ls_excel-datab,
+            gs_salida-datbi        TO ls_excel-datbi,
+            gs_salida-kbetr        TO ls_excel-kbetr,
+            gs_salida-kbetr1       TO ls_excel-kbetr1,
+            gs_salida-kbetr2       TO ls_excel-kbetr2,
+            gs_salida-kbetr3       TO ls_excel-kbetr3,
+            gs_salida-lvorm        TO ls_excel-lvorm,
+            gs_salida-mstae        TO ls_excel-mstae,
+            gs_salida-mstav        TO ls_excel-mstav,
+            gs_salida-valor_neto   TO ls_excel-valor_neto,
+            gs_salida-valor_total  TO ls_excel-valor_total,
+            gs_salida-waers        TO ls_excel-waers,
+            gs_salida-importe_bruto TO ls_excel-importe_bruto,
+            gs_salida-importe_neto  TO ls_excel-importe_neto,
+            gs_salida-taxib         TO ls_excel-taxib.
+      CONDENSE: ls_excel-valor_neto, ls_excel-valor_total, ls_excel-waers, ls_excel-importe_bruto,ls_excel-importe_neto,ls_excel-taxib, gs_salida-kbetr,
+                ls_excel-kbetr, ls_excel-kbetr1, ls_excel-kbetr2, ls_excel-kbetr3, ls_excel-kbetr_precio.
+      APPEND ls_excel TO lt_excel.
+    ENDLOOP.
+
+
+*" Descargo el Excel
+    CALL METHOD cl_gui_frontend_services=>gui_download
+      EXPORTING
+        filename                = lv_filename
+        filetype                = 'ASC'
+        write_field_separator   = 'X'
+        trunc_trailing_blanks   = 'X'
+      CHANGING
+        data_tab                = lt_excel
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        OTHERS                  = 22.
